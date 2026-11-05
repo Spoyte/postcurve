@@ -149,6 +149,19 @@ Three partner picks; a pick covers all that partner's prizes.
   same one-time key to sign a replacement, which breaks WOTS security. With a tree, any unused
   leaf can sign, and the account records used leaves. When a tree runs low, the approver rotates
   to a new root with an approval from the old one.
+- **Approvers sign a bunker-specific approval struct, never a bare digest.** The struct holds
+  chain id, account, leaf index, recipient, value, calldata hash and a valid-until time. The
+  Firefly rebuilds the hash from the fields it shows on screen, so a compromised host can't show
+  one thing and get another signed. The account verifies each approval over the same struct
+  hash, and checks that the transaction's execution matches the struct. Demo scope is ETH and
+  ERC-20 transfers. Any other call is shown as "contract call" with its calldata hash and a
+  warning.
+- **Arkiv holds only postcurve's own scan, never users' checks.** That means the canary
+  watchlist (large, dormant, exposed addresses) and the exposure records for those addresses,
+  written by a project wallet from a script, with an expiry so stale records disappear. Users
+  see Arkiv data in the canary dashboard (watchlist, status, last movement). The personal check
+  never queries Arkiv by the user's address. If it uses the dataset at all, it downloads the
+  whole set and filters locally.
 - **WOTS with w=16 over keccak256** (cheapest hash in the EVM; proven on the Firefly in May).
 - **Quorum 2-of-3 for the demo:** the Firefly plus two software approvers in the browser. The
   contract supports any N-of-M.
@@ -179,7 +192,7 @@ Three partner picks; a pick covers all that partner's prizes.
 - XMSS tree height, signature envelope format, root rotation details.
 - Exposure detection beyond the nonce check, and how far to go.
 - Where the canary's watchlist comes from, and its thresholds.
-- Arkiv entity schema and expiry.
+- Arkiv entity schema and expiry period.
 - CRE workflow shape and the alert path to the ESP32.
 - Serial protocol between host and Firefly.
 - Web framework and UI.

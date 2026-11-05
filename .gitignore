@@ -1,0 +1,27 @@
+# Secrets: never commit keys, seeds or RPC credentials
+.env
+.env.*
+!.env.example
+*.key
+*.seed
+
+# Node / web
+node_modules/
+dist/
+.vite/
+*.log
+
+# Foundry
+out/
+cache/
+broadcast/
+
+# ESP-IDF firmware
+build/
+sdkconfig.old
+managed_components/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

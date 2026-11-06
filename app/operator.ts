@@ -11,6 +11,7 @@ import {
   createWalletClient,
   defineChain,
   encodeFunctionData,
+  getAddress,
   http,
   isAddress,
   isHex,
@@ -58,7 +59,7 @@ export function operatorHandler(deps: OperatorDeps): (request: Request) => Promi
         if (typeof address !== "string" || !isAddress(address, { strict: false })) {
           return json({ error: "address must be an address" }, 400);
         }
-        return json(await deps.faucet(address as Address));
+        return json(await deps.faucet(getAddress(address.toLowerCase())));
       }
       return json({ error: `no route for ${request.method} ${path}` }, 404);
     } catch (e) {
@@ -133,7 +134,8 @@ function realDeps(): OperatorDeps {
     },
     faucet: async (address) => {
       const d = deployment();
-      const ethTx = await wallet("faucet").send(address, undefined, parseEther("0.05"), 21_000n);
+      // a transfer that creates an account pays EIP-8037 state gas here: 21,000 is not enough
+      const ethTx = await wallet("faucet").send(address, undefined, parseEther("0.05"), 500_000n);
       const mintTx = await wallet("deployer").send(
         d.token,
         encodeFunctionData({ abi: abi.token, functionName: "mint", args: [address, 100_000_000n] }),

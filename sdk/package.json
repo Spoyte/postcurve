@@ -9,6 +9,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@forshtat/hegota-support": "0.0.1",
     "@noble/hashes": "^2.4.0",
     "@noble/post-quantum": "^0.7.1",
     "@scure/bip39": "^2.4.0",

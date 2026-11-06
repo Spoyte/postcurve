@@ -76,22 +76,35 @@ model custodians already use. A nice-to-have for the pitch; drop it if it costs 
 
 ## How a spend works
 
-A spend from a stealth bunker account is one frame transaction (EIP-8141) on the local devnet:
+A spend from a stealth bunker account is one frame transaction (EIP-8141), as built and admitted
+on the local devnet (2026-11-06, measured gas in brackets):
 
 ```
-[deploy]          first spend only: the factory deploys the stealth account at its address
-[only_verify]     stealth account: cheap check, approves execution            (unstaked, < 100k)
-[pre_verify]      paymaster: verifies the quorum, records used one-time keys  (staked, ≤ 1M)
-[pay]             paymaster: checks pre_verify succeeded and the fee is covered, approves payment
-[sender]          token.transfer(destination, amount)
-[sender]          token.transfer(paymaster, fee)
+[only_verify]     stealth account: checks the frame layout, approves execution     (unstaked ≤ 100k; 29,766)
+[pay]             paymaster: verifies the 2-of-3 hash-only quorum, approves payment (staked ≤ 1M; 555,721)
+[commit]          paymaster, atomic: records the one-time keys, enforces validUntil (32,293)
+[sender]          atomic: token.transfer(destination, amount)                      (30,237)
+[sender]          token.transfer(paymaster, fee)                                   (15,337)
 ```
 
 A fresh stealth account holds only tokens, so it can't stake and stays under the 100,000-gas
-unstaked budget. The staked paymaster's budget (up to 1,000,000 under ERC-8421) carries the
-~530k quorum check: ERC-8421 counts a `pre_verify` frame toward the entity of the approving
-frame it precedes, and lets it write storage. If the paymaster doesn't approve payment, the
-whole transaction is invalid and nothing executes.
+unstaked budget. The staked paymaster's budget (up to 1,000,000 under ERC-8421 BUDGET-010, which
+our sidecar patch implements) carries the quorum check in its `pay` frame. `pay` is a VERIFY
+frame (a static call), so it can't record the keys itself: it requires the next frame to be
+`commit` for exactly the keys it verified, in one atomic batch with both transfers. `commit` only
+runs after this paymaster's own `pay` succeeded in the same tx. If the paymaster doesn't approve
+payment, the whole transaction is invalid and nothing executes.
+
+Two things differ from the first draft because of what this devnet's ethrex supports:
+- **No `pre_verify` frame.** That frame is an ERC-8421 addition. ethrex's validation trace,
+  which the sidecar requires, only recognizes EIP-8141's four shapes.
+- **No `expiry_verify` frame.** This ethrex's EIP-8141 revision predates it, and TIMESTAMP is
+  banned during validation. `commit` enforces `validUntil` instead, during execution.
+
+The stealth account is deployed by a sponsor in a separate transaction just before the spend.
+Its ~7 KB of code costs ~10.9M gas in EIP-8037 state gas, far beyond what a deploy frame inside
+the validation prefix may use. A minimal-proxy account would allow deploying within the spend
+later.
 
 ## Goals
 

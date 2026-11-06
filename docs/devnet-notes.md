@@ -70,6 +70,22 @@ Calldata is extra: each envelope is 2,432 bytes. These figures are the unoptimiz
 the allocation-heavy `abi.encode` in the hash loops is the obvious first target if the staked
 budget turns out tighter.
 
+### End-to-end stealth spend (2026-11-06)
+
+`cd sdk && bun scripts/deploy-stealth.ts && bun scripts/e2e-stealth.ts`: admitted by the patched
+sidecar, mined in block 2084, total gasUsed 1,145,121, all five frames succeeded. The paymaster's
+`pay` frame (2-of-3 WOTS/XMSS check) used 555,721, well inside the staked 1,000,000 budget. The
+Foundry figure for the same call (~1.04M) is inflated by the test mocks.
+
+Lessons from getting there:
+- ethrex's `ethrex_simulateFrameTransaction` (the sidecar requires its ERC-7562 trace) only
+  recognizes EIP-8141's four prefix shapes. It rejects ERC-8421's `pre_verify` and, on this
+  revision, an `expiry_verify` frame to the undeployed `EXPIRY_VERIFIER`, both with "frame
+  transaction validation prefix does not match any recognized shape".
+- TIMESTAMP is banned in validation frames, so time checks belong in execution.
+- Deploying a ~7 KB contract costs ~10.9M gas (EIP-8037 state gas); the 16 KB paymaster deploy
+  needs a 50M limit.
+
 ## Gotchas (from the sidecar's devnet readme)
 
 - A `SENDER` frame that sends value to an address with no account needs `limits.state > 0`;

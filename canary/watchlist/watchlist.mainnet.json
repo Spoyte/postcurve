@@ -1,0 +1,118 @@
+{
+  "schema": "postcurve.canary.watchlist/v1",
+  "chainId": 1,
+  "chainLabel": "ethereum mainnet",
+  "source": "built from chain 1 JSON-RPC alone: senders and recipients of transfers over 50 ETH in blocks 26300000..26350000 (step 100), kept if they hold over 100 ETH today and their account nonce is above 0 (so their public key is on-chain). Dormancy is proven by an unmoved nonce where the account's last transaction fell inside the sample; other entries carry no dormancy seed and the canary times them from first sighting (accounts with a nonce over 200, contracts and delegated accounts excluded)",
+  "builtAt": 1793969816,
+  "builtBy": "watchlist/build-watchlist.ts --chain-id 1 --from-block 26300000 --to-block 26350000 --step 100 --min-tx-value-eth 50 --min-balance-eth 100 --candidates both --allow-unproven-dormancy --max-current-nonce 200",
+  "entries": [
+    {
+      "address": "0xff96ca435ab1e7a1cc47e99cad48dfa2d1831f80",
+      "balanceWeiAtBuild": "93695409169600000001000",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 1, so it has signed at least once and its public key is on-chain; seen receiving 93695.4 ETH in block 26336300. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    },
+    {
+      "address": "0x6073cf6d98404319f035d368541c765c06354169",
+      "balanceWeiAtBuild": "23633194817307198372531",
+      "exposure": {
+        "kind": "transaction-sender",
+        "evidenceTx": "0x70c460cfca155972dd8c3e9934ac3aa05b55c2c938141c1f95ec353adc3ee793",
+        "evidenceBlock": 26336300,
+        "evidenceAt": 1793733311,
+        "evidenceNonce": 6,
+        "source": "chain 1 JSON-RPC: sender of a 93695.4 ETH transaction at nonce 6, and the account nonce is still 7, so it has sent nothing since"
+      },
+      "lastOutgoingBlock": 26336300,
+      "lastOutgoingAt": 1793733311
+    },
+    {
+      "address": "0x6c0f1bdc3fcb451452cf9047a7ee0241a11f17be",
+      "balanceWeiAtBuild": "17784563813002581845793",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 44, so it has signed at least once and its public key is on-chain; seen receiving 1164.9 ETH in block 26333500. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    },
+    {
+      "address": "0xa072dcf6bec138ddb4874f9e6bdb8b10cb3f831f",
+      "balanceWeiAtBuild": "5176342022890172844855",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 82, so it has signed at least once and its public key is on-chain. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    },
+    {
+      "address": "0x3202d3d01463b9a5b599410a8480d0ff2ea6bf31",
+      "balanceWeiAtBuild": "683709967225790056491",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 4, so it has signed at least once and its public key is on-chain; seen receiving 362.159119 ETH in block 26341000. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    },
+    {
+      "address": "0x381640e7beed9892f014773ac7780cb0c6222735",
+      "balanceWeiAtBuild": "425340821113614295619",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 137, so it has signed at least once and its public key is on-chain; seen receiving 107.99964 ETH in block 26343000. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    },
+    {
+      "address": "0xb05904ab2566d60bc921affe8c1abfaa33ee1381",
+      "balanceWeiAtBuild": "410660977742997427143",
+      "exposure": {
+        "kind": "transaction-sender",
+        "evidenceTx": "0x67e39748eb7b7cdb6089858b5913e87a5446dbff485ed6d56ccfaaedde7780e7",
+        "evidenceBlock": 26340200,
+        "evidenceAt": 1793780255,
+        "evidenceNonce": 119,
+        "source": "chain 1 JSON-RPC: sender of a 100 ETH transaction at nonce 119, and the account nonce is still 120, so it has sent nothing since"
+      },
+      "lastOutgoingBlock": 26340200,
+      "lastOutgoingAt": 1793780255
+    },
+    {
+      "address": "0x1b2ea0c2ec40a7a4d9240c63251cc1312efbaf93",
+      "balanceWeiAtBuild": "376571121927633241324",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 107, so it has signed at least once and its public key is on-chain. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    },
+    {
+      "address": "0x2ed1c6227dd3e9228157c9c9e645732e8b1f73e9",
+      "balanceWeiAtBuild": "281374709323082639549",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 29, so it has signed at least once and its public key is on-chain. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    },
+    {
+      "address": "0xf41f7febd6574fe0b08b999598df44f6b3e95006",
+      "balanceWeiAtBuild": "261252586471207193192",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 162, so it has signed at least once and its public key is on-chain. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    },
+    {
+      "address": "0xf88a776a0bddc12fdcdbd67f884693c89e68ef74",
+      "balanceWeiAtBuild": "258983049336997543189",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 10, so it has signed at least once and its public key is on-chain; seen receiving 214.82667 ETH in block 26308800. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    },
+    {
+      "address": "0xfdc4c58523befdfebadb796c4eb825c8f7229e93",
+      "balanceWeiAtBuild": "158521194415258088663",
+      "exposure": {
+        "kind": "transaction-sender",
+        "source": "chain 1 JSON-RPC: account nonce is 179, so it has signed at least once and its public key is on-chain; seen receiving 68 ETH in block 26327100. Its last outgoing transaction was not in the sampled range, so dormancy was not proven at build time and the canary times it from first sighting"
+      }
+    }
+  ]
+}

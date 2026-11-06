@@ -1,0 +1,24 @@
+{
+  "schedule": "0 */10 * * * *",
+  "chain": {
+    "creChainName": "ethereum-mainnet",
+    "isTestnet": false,
+    "id": 1,
+    "label": "ethereum mainnet"
+  },
+  "service": {
+    "baseUrl": "http://127.0.0.1:8788",
+    "locateMove": false
+  },
+  "thresholds": {
+    "minDormancySeconds": 63072000,
+    "minMovedFraction": 0.5,
+    "minMovedWei": "50000000000000000000",
+    "minBalanceWei": "100000000000000000000"
+  },
+  "maxAddresses": 25,
+  "run": {
+    "workflow": "postcurve-canary",
+    "mode": "cre-cli-simulation"
+  }
+}

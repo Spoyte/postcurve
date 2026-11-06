@@ -1,0 +1,35 @@
+# ==========================================================================
+# CRE project settings for the postcurve canary
+# ==========================================================================
+# One target per chain the canary watches. `cre workflow simulate` resolves the RPC to
+# read from by chain-selector name, so `chain-name` here must match `chain.creChainName`
+# in the workflow config (workflow/config.*.json).
+#
+#   devnet-settings  -> the local EIP-8141 devnet (ethrex, chain id 1337)
+#   mainnet-settings -> Ethereum mainnet, read-only
+#
+# Why the devnet target is named after a Chainlink private testnet: the local devnet is
+# chain id 1337, and the CRE EVM capability has no chain selector for it. Chainlink's
+# own registry does list chain 1337 as `geth-testnet`, but CRE CLI v1.20.0 (the version
+# this was built and simulated with) rejects that name, so the devnet RPC is configured
+# under a selector name the CLI accepts. The RPC URL below is the only thing that
+# decides which chain is read; the real chain id travels in the workflow config and in
+# every alert, so nothing downstream is misled about which chain it is looking at. On a
+# CRE CLI new enough to accept it, swap both this name and `chain.creChainName` in
+# workflow/config.devnet.json for `geth-testnet`.
+#
+# RPC URLs accept ${VAR} substitution from a .env file passed with `--env`.
+
+devnet-settings:
+  cre-cli:
+    don-family: "zone-a"
+  rpcs:
+    - chain-name: private-testnet-rhyolite
+      url: http://127.0.0.1:18545
+
+mainnet-settings:
+  cre-cli:
+    don-family: "zone-a"
+  rpcs:
+    - chain-name: ethereum-mainnet
+      url: https://ethereum.publicnode.com/

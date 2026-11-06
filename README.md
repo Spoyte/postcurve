@@ -37,7 +37,7 @@ cd ../sdk && bun scripts/gen-vectors.ts    # regenerate spec/vectors (tests chec
 | Paymaster | Pays a stealth account's gas in exchange for test USDC and carries the quorum check | planned |
 | Send and scan | pq-sap meta-address, sending to a stealth address, scanning announcements | planned |
 | Approvers | Browser and paper approvers; Firefly approver firmware as a separate sub-project | planned |
-| Canary | Chainlink CRE workflow watching dormant exposed addresses; ESP32 light as a separate sub-project | in progress |
+| Canary | Chainlink CRE workflow watching dormant exposed addresses ([canary/](canary/README.md)); ESP32 light as a separate sub-project | done (CRE CLI simulation, devnet demo) |
 | Exposure dataset | Canary watchlist and exposure records as queryable Arkiv entities | later |
 | Move | Careful migration from an exposed address into a bunker | later |
 | Local devnet | ethrex + Lighthouse + alt mempool sidecar on 127.0.0.1 ([devnet/](devnet/README.md)) | running |

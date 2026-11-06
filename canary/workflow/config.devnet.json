@@ -1,0 +1,24 @@
+{
+  "schedule": "0 */1 * * * *",
+  "chain": {
+    "creChainName": "private-testnet-rhyolite",
+    "isTestnet": true,
+    "id": 1337,
+    "label": "local EIP-8141 devnet (ethrex, chain id 1337)"
+  },
+  "service": {
+    "baseUrl": "http://127.0.0.1:8787",
+    "locateMove": true
+  },
+  "thresholds": {
+    "minDormancySeconds": 120,
+    "minMovedFraction": 0.5,
+    "minMovedWei": "10000000000000000000",
+    "minBalanceWei": "100000000000000000000"
+  },
+  "maxAddresses": 25,
+  "run": {
+    "workflow": "postcurve-canary-devnet",
+    "mode": "cre-cli-simulation"
+  }
+}

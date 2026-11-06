@@ -1,0 +1,9 @@
+# Runtime artifacts of the canary service and the staged demo.
+# .state/ holds a throwaway devnet key (mode 600), the stored canary state and alerts.
+.state/
+
+# CRE build output
+*.wasm
+*.wasm.br
+.cre_build_tmp.js
+.cre/

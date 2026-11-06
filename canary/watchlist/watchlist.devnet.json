@@ -1,0 +1,39 @@
+{
+  "schema": "postcurve.canary.watchlist/v1",
+  "chainId": 1337,
+  "chainLabel": "local EIP-8141 devnet (ethrex, chain id 1337)",
+  "source": "built from chain 1337 JSON-RPC alone: senders of transfers over 1 ETH in blocks 1564..1566 (step 1), kept if they hold over 100 ETH today and their account nonce is above 0 (so their public key is on-chain). Dormancy is proven by an unmoved nonce where the account's last transaction fell inside the sample and entries without that proof were dropped",
+  "builtAt": 1793969761,
+  "builtBy": "watchlist/build-watchlist.ts --chain-id 1337 --from-block 1564 --to-block 1566 --step 1 --min-tx-value-eth 1 --min-balance-eth 100 --candidates senders",
+  "entries": [
+    {
+      "address": "0x090bf5154c24a1ffd2e95c5abae7ff0c83f3ae18",
+      "balanceWeiAtBuild": "998502999999979284489600",
+      "exposure": {
+        "kind": "transaction-sender",
+        "evidenceTx": "0x02004e252ed027f075e7c2f77b7fb1ed3b4266b43b72b71ba447904e390180ce",
+        "evidenceBlock": 1565,
+        "evidenceAt": 1793969751,
+        "evidenceNonce": 2,
+        "source": "chain 1337 JSON-RPC: sender of a 500 ETH transaction at nonce 2, and the account nonce is still 3, so it has sent nothing since"
+      },
+      "lastOutgoingBlock": 1565,
+      "lastOutgoingAt": 1793969751
+    },
+    {
+      "address": "0xb7d7e7b6edb4969b6ee22b2338b2a1b4f3ff6295",
+      "label": "staged devnet account: funded, signed once, then left alone",
+      "balanceWeiAtBuild": "498999999999997732000",
+      "exposure": {
+        "kind": "transaction-sender",
+        "evidenceTx": "0xa4cbb3e0126086b2be1b814f4cbf3c5b077cc9637821fe16ff1b587b8d0622df",
+        "evidenceBlock": 1566,
+        "evidenceAt": 1793969757,
+        "evidenceNonce": 0,
+        "source": "chain 1337 JSON-RPC: sender of a 1 ETH transaction at nonce 0, and the account nonce is still 1, so it has sent nothing since"
+      },
+      "lastOutgoingBlock": 1566,
+      "lastOutgoingAt": 1793969757
+    }
+  ]
+}

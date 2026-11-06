@@ -1,0 +1,20 @@
+{
+  "name": "postcurve-canary-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chainlink CRE workflow: early warning that exposed elliptic-curve keys may be breaking",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@chainlink/cre-sdk": "1.23.0",
+    "viem": "2.37.6",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

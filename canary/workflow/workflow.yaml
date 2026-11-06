@@ -1,0 +1,21 @@
+# ==========================================================================
+# CRE workflow settings for the postcurve canary
+# ==========================================================================
+# Target names match project.yaml. Pick one with `--target`, e.g.
+#   cre workflow simulate ./workflow --target devnet-settings
+
+devnet-settings:
+  user-workflow:
+    workflow-name: "postcurve-canary-devnet"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.devnet.json"
+    secrets-path: ""
+
+mainnet-settings:
+  user-workflow:
+    workflow-name: "postcurve-canary"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.mainnet.json"
+    secrets-path: ""

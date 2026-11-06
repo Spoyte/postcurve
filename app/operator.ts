@@ -98,11 +98,14 @@ function realDeps(): OperatorDeps {
   };
   const accountCreationCode = artifact("StealthBunkerAccount.sol", "StealthBunkerAccount").bytecode;
   const deployment = () => JSON.parse(readFileSync(DEPLOYMENT_PATH, "utf8")) as StealthDeployment;
+  // keys are re-read on every call: a devnet reset writes new ones, and a cached key would hold no ETH
   const wallets = new Map<string, { send: (to: Address, data?: Hex, value?: bigint, gas?: bigint) => Promise<Hex> }>();
   const wallet = (name: string) => {
-    let w = wallets.get(name);
+    const account = privateKeyToAccount(devnetKey(name));
+    const id = `${name}:${account.address}`;
+    let w = wallets.get(id);
     if (!w) {
-      const client = createWalletClient({ chain, transport: http(rpcUrl), account: privateKeyToAccount(devnetKey(name)) });
+      const client = createWalletClient({ chain, transport: http(rpcUrl), account });
       const queue = serial();
       w = {
         send: (to, data, value = 0n, gas = 3_000_000n) =>
@@ -114,7 +117,7 @@ function realDeps(): OperatorDeps {
             return hash;
           }),
       };
-      wallets.set(name, w);
+      wallets.set(id, w);
     }
     return w;
   };

@@ -7,6 +7,7 @@ import { Pay } from "./screens/Pay";
 import { Payments } from "./screens/Payments";
 import { Receive } from "./screens/Receive";
 import { Setup } from "./screens/Setup";
+import { Spend } from "./screens/Spend";
 
 function NotBuiltYet({ name }: { name: string }) {
   return (
@@ -55,6 +56,7 @@ export function App() {
   const screens: Record<string, () => ReactNode> = {
     receive: () => <Receive />,
     payments: () => <Payments />,
+    spend: () => <Spend account={route.arg ?? ""} />,
   };
   const screen = screens[route.name];
   return <Shell route={route.name || "receive"}>{screen ? screen() : route.name ? <NotBuiltYet name={route.name} /> : <Receive />}</Shell>;

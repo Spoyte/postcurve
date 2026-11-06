@@ -135,15 +135,14 @@ is enough!". One caveat worth stating plainly: this CLI already held credentials
 earlier session, so a completely fresh machine may be prompted to `cre login` before
 `cre workflow simulate` will run. Nothing in the workflow itself needs an account.
 
-This was built and simulated with **CRE CLI v1.20.0** and **`@chainlink/cre-sdk`
+This was built and simulated with **CRE CLI v1.20.0** (re-checked on v1.39.0) and **`@chainlink/cre-sdk`
 1.23.0**. One wrinkle worth knowing about: the local devnet is chain id 1337, and the CRE
 EVM capability has no chain selector for it. Chainlink's registry does list chain 1337
-(as `geth-testnet`), but CRE CLI v1.20.0 refuses that name in `project.yaml`, so the
-devnet RPC is registered under a selector name the CLI does accept
-(`private-testnet-rhyolite`). **The RPC URL is the only thing that decides which chain is
-read**, and the real chain id travels in the workflow config and in every alert, so no
-reader of an alert is misled. On a newer CLI, change the name in both `project.yaml` and
-`workflow/config.devnet.json` to `geth-testnet`.
+(as `geth-testnet`), but the CRE CLI refuses that name in `project.yaml` (checked on v1.20.0
+and again on v1.39.0, 2026-11-06), so the devnet RPC is registered under a selector name the
+CLI does accept (`private-testnet-rhyolite`). **The RPC URL is the only thing that decides
+which chain is read**, and the real chain id travels in the workflow config and in every
+alert, so no reader of an alert is misled.
 
 ## Run the simulation
 

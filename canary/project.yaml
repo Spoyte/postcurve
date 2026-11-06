@@ -10,13 +10,11 @@
 #
 # Why the devnet target is named after a Chainlink private testnet: the local devnet is
 # chain id 1337, and the CRE EVM capability has no chain selector for it. Chainlink's
-# own registry does list chain 1337 as `geth-testnet`, but CRE CLI v1.20.0 (the version
-# this was built and simulated with) rejects that name, so the devnet RPC is configured
-# under a selector name the CLI accepts. The RPC URL below is the only thing that
-# decides which chain is read; the real chain id travels in the workflow config and in
-# every alert, so nothing downstream is misled about which chain it is looking at. On a
-# CRE CLI new enough to accept it, swap both this name and `chain.creChainName` in
-# workflow/config.devnet.json for `geth-testnet`.
+# own registry does list chain 1337 as `geth-testnet`, but the CRE CLI rejects that name
+# (v1.20.0 and v1.39.0 both), so the devnet RPC is configured under a selector name the
+# CLI accepts. The RPC URL below is the only thing that decides which chain is read; the
+# real chain id travels in the workflow config and in every alert, so nothing downstream
+# is misled about which chain it is looking at.
 #
 # RPC URLs accept ${VAR} substitution from a .env file passed with `--env`.
 

@@ -36,16 +36,24 @@ export class Approver {
   }
 
   /**
-   * Signs with the lowest unused leaf. The leaf is recorded as used before the signature is
-   * computed, so a failure part-way can never lead to the same leaf signing something else.
-   * Callers must persist `usedLeaves()` before sending the envelope anywhere.
+   * Signs with the lowest unused leaf, in this order:
+   * 1. reserve the leaf in memory, so this instance never hands it out again;
+   * 2. await `save(usedLeaves)`, which must durably record the list (the list includes the new
+   *    leaf) before it resolves;
+   * 3. only then compute the signature.
+   * If `save` throws, no signature is produced and the leaf stays reserved, so a crash or a
+   * failed save can never lead to the same leaf signing a second digest.
    */
-  approve(digest: Hex): { leaf: number; envelope: Hex } {
+  async approve(
+    digest: Hex,
+    save: (usedLeaves: number[]) => void | Promise<void>,
+  ): Promise<{ leaf: number; envelope: Hex }> {
     if (hexToBytes(digest).length !== 32) throw new RangeError("digest must be 32 bytes");
     let leaf = 0;
     while (leaf < LEAF_COUNT && this.used.has(leaf)) leaf++;
     if (leaf === LEAF_COUNT) throw new TreeExhaustedError();
     this.used.add(leaf);
+    await save(this.usedLeaves());
     return { leaf, envelope: signEnvelope(this.seed, this.tree, leaf, digest) };
   }
 

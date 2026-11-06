@@ -140,10 +140,20 @@ Three partner picks; a pick covers all that partner's prizes.
 - Rewrite from scratch, reusing ideas from the May prototype.
 - MPC stays out of the core.
 - Hardware available: Firefly Pixie and an ESP32 starter kit.
+- **Partners: EF, Arkiv, Chainlink** (confirmed 2026-11-06).
+- **The three approver keys live in three places** (confirmed 2026-11-06):
+  - the Firefly, which generates its own key on the device and shows the backup words on its
+    screen;
+  - the browser, which holds the everyday key;
+  - a paper recovery seed, used only if one of the other two is lost.
+
+  Any two can move funds; the browser alone never can. After setup, no single device may hold
+  two of the three keys. If setup or recovery briefly breaks that rule, the README says so. The
+  Move step's recovery check must prove a quorum can be rebuilt from backups (paper seed plus
+  the Firefly's words, or paper plus browser) before the bulk of the funds moves.
 
 ## Calls made during design (review these)
 
-- **Partners: EF, Arkiv, Chainlink.** Proposed during planning; not explicitly confirmed.
 - **One-time keys as leaves of a Merkle tree (XMSS-style), not a chain of next-key
   commitments.** With a chain, a signed approval that gets stuck forces the approver to reuse the
   same one-time key to sign a replacement, which breaks WOTS security. With a tree, any unused
@@ -163,8 +173,8 @@ Three partner picks; a pick covers all that partner's prizes.
   never queries Arkiv by the user's address. If it uses the dataset at all, it downloads the
   whole set and filters locally.
 - **WOTS with w=16 over keccak256** (cheapest hash in the EVM; proven on the Firefly in May).
-- **Quorum 2-of-3 for the demo:** the Firefly plus two software approvers in the browser. The
-  contract supports any N-of-M.
+- **Quorum 2-of-3 for the demo** (Firefly, browser, paper recovery). The contract supports any
+  N-of-M.
 - **Networks:** check runs on mainnet through Anon-RPC; everything else (migration, bunker,
   canary staging) on the 8141 devnet.
 - **Stack:** Solidity with Foundry; a TypeScript web app; ESP-IDF C firmware.

@@ -53,7 +53,8 @@ model custodians already use. A nice-to-have for the pitch; drop it if it costs 
 6. **Approvers.** Three approver keys in three places: the Firefly, which generates its own key
    on the device and shows the backup words on its screen; the browser, which holds the
    everyday key; and a paper recovery seed, used only if one of the other two is lost. Any two
-   can approve; the browser alone never can. The core demo uses browser and paper approvers.
+   can approve; the browser alone never can. **Paper is for recovery only**: it never signs in
+   the everyday flow, so the demo's two everyday approvers are the browser and a device approver.
    The **Firefly approver firmware is a separate sub-project**, built after the core.
 7. **Canary.** A Chainlink CRE workflow watching large, long-dormant, exposed addresses for
    sudden sweeps: an early sign someone can break ECDSA. Being built in parallel. The **ESP32
@@ -212,6 +213,24 @@ Three partner picks; a pick covers all that partner's prizes.
   The paymaster accepts exactly two execution frames: `token.transfer(to, amount)` and
   `token.transfer(paymaster, fee)` with `fee ≤ maxFee`. This scope is narrow on purpose: it is
   safe, and the Firefly can show every field. (The generic v1 `Approval` stays in the SDK.)
+- **The viewing key is backed up by the paper seed.** Losing the ML-KEM viewing key would lose
+  funds, not just privacy: without it you can't find payments or recompute the opener. So the
+  ML-KEM-768 keypair is derived deterministically, with domain separation, from the paper recovery
+  seed, and the paper backup restores scanning as well as one approver. The browser keeps a copy
+  for everyday scanning; the viewing key can't spend. The browser derives it during setup, which
+  is the documented setup exception to "no device holds two keys" (stated in the README).
+- **Paper recovery signing** (built with Move) reads the paymaster's used-key register first and
+  signs only with leaves above the highest one recorded. It re-sends the same signed approval
+  until it is included or expires, and never signs a new digest with a leaf it has already
+  released in that session. The README states the remaining edge case: a signed but never-included
+  approval from a past session isn't in the register.
+- **No single point of custody.** Every stealth account also accepts an emergency self-paid spend:
+  it verifies the quorum itself and pays gas from its own ETH. That needs a staked account or a
+  private builder for the over-100k check. It is used only if the paymaster is unavailable, and
+  costs privacy, never funds. The paymaster and account contracts are immutable: no admin, no
+  upgrade, no pause.
+- **Sidecar patch ownership:** a side agent prepares it on the Spoyte fork; the main session
+  reviews it; the pull request opens only after the author's OK.
 - **What a spend reveals:** the quorum config, which links every stealth account that recipient
   has spent from (the same trade-off as pq-sap's direct spend routes). Detection privacy rests
   on ML-KEM. Both go in the README's CROPS "P" line.

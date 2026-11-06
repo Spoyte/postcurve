@@ -169,3 +169,23 @@ code, .mono { font-family: var(--mono); font-size: 0.92em; }
 .keys3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .legend { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+/* canary */
+.alerts { display: flex; flex-direction: column; gap: 12px; }
+.alert-card h2 { color: #fee2e2; }
+.alert-card .k { color: #fca5a5; }
+.alert-card p.muted { color: #f3b4b4; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.table td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+.table tr.hit td { background: var(--red-deep); color: #fecaca; }
+
+/* device (phone) */
+.solo.phone { max-width: 520px; }
+.words.phone-words { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.request h2 { color: var(--text-strong); }
+@media (max-width: 640px) {
+  .solo { padding: 18px 14px 32px; }
+  .seen .k { width: 92px; }
+  .seen .mono { word-break: break-all; }
+}

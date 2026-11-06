@@ -29,6 +29,8 @@ anti-goals apply). Brainstorm mockups (local only): `.superpowers/brainstorm/*/c
   App origins: `http://localhost:5173`, `http://127.0.0.1:5173`.
 - Proxy: `/rpc` → `127.0.0.1:18545`, `/sidecar` → `127.0.0.1:14337/rpc`, `/canary` → `127.0.0.1:8787`,
   `/device` → `127.0.0.1:8790`, `/operator` → `127.0.0.1:8791` (prefix stripped).
+- Extra app origins (the public tunnel URL) come from `POSTCURVE_APP_ORIGINS` (comma-separated), read by
+  every local service at start.
 - Local services bind `127.0.0.1`. A `POST` whose `Origin` is not an app origin gets 403; a `GET`
   with a foreign `Origin` gets 403; a `GET` with no `Origin` is allowed (browsers omit it on
   same-origin GETs) and only ever returns public data.
@@ -44,6 +46,9 @@ anti-goals apply). Brainstorm mockups (local only): `.superpowers/brainstorm/*/c
   in storage before its signature exists. The paper seed is never stored.
 - Commits: small Conventional Commits as Spoyte, pushed after each task. Nothing mentions the
   user's employer; no AI attribution. Keep README current.
+
+**Execution order** (decided 2026-11-07 with the author: a public URL through a Cloudflare Tunnel
+from the laptop, with a phone approver for visitors): Tasks 1–9, then 12, 13, 11, 10.
 
 ## Review Focus
 
@@ -303,3 +308,43 @@ type SpendRecord = {
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** `bun test` — Expected: PASS. Manual: check `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045` — Expected: exposed, with a balance.
 - [ ] **Step 5: Commit** `feat(app): exposure check`.
+
+### Task 12: Phone approver (the device stand-in, for visitors)
+
+**Files:**
+- Create: `app/src/lib/device.ts`, `app/src/screens/Device.tsx`, `app/relay.ts`, `app/test/{relay,device}.test.ts`
+- Modify: `app/operator.ts` (mount the relay), `app/src/screens/Setup.tsx` (step 2 offers terminal or phone), `app/src/lib/spend.ts` (sign through `DeviceApprover`), `app/src/lib/store.ts` (`device` field)
+
+**Interfaces:**
+- Consumes: `originAllowed` (Task 2), `parseSignRequest` (Task 2), `BrowserKey` (Task 4, reused on the phone for its own key), `transferApprovalDigest`.
+- Produces:
+  - Relay, in the operator's memory (no disk), keyed by an unguessable `pairId` (16 random bytes, hex): `POST /relay/:pair/identity {identity}` (once); `GET /relay/:pair/identity` → `Identity | 404`; `POST /relay/:pair/requests {request}` → `{requestId}`; `GET /relay/:pair/requests/next` → the oldest unanswered request or 204; `POST /relay/:pair/responses/:id` → accepts one answer `{leaf, envelope, identity}` or `{refused: true}`, then 409; `GET /relay/:pair/responses/:id` → the answer or 204. Requests expire after 10 minutes; at most 16 open per pair.
+  - `interface DeviceApprover { identity(): Promise<Identity>; sign(req: SignRequest): Promise<{leaf: number; envelope: Hex; identity: Identity}> }` with `bridgeDevice()` (Task 2's `/device`) and `phoneDevice(pairId)` (relay, polling every 1 s, rejects with "refused on the device" on a refusal). The store gains `device: {kind: "bridge"} | {kind: "phone"; pairId: string}`.
+  - `#/device?pair=<id>` (no sidebar, header "Device (software stand-in, on your phone)"): first open makes the phone's own key (seed and used list in the phone's storage), shows its backup words once, posts its identity; then waits for requests and shows each one's decoded fields (chain, stealth account, token, amount, destination, max fee, valid until) with Approve and Refuse. Approve computes the digest itself from those fields (a digest in the request is ignored), records the key as used, signs, and answers.
+  - Setup step 2: "Use the device terminal (this computer)" or "Use your phone": a QR of the device link and "waiting for your phone".
+
+- [ ] **Step 1: Write the failing tests.** `relay.test.ts`: a request posted to pair A is not visible from pair B; a second answer to the same request gets 409; an unknown pair's `GET /identity` is 404; a `POST` with a foreign `Origin` is 403; the 17th open request is refused. `device.test.ts`: `approveOnPhone(req, key)` signs the digest computed from the request's fields even when the request carries a different `digest` field; the key is recorded as used before the envelope exists (reuse Task 4's `persist` pattern).
+- [ ] **Step 2: Run** `cd app && bun test test/relay.test.ts test/device.test.ts` — Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `bun test` — Expected: PASS. Manual: Setup with "Use your phone" (a second browser window on `#/device?pair=…` stands in for the phone), then a spend — Expected: the request appears on the device page, Approve completes the spend.
+- [ ] **Step 5: Commit** `feat(app): phone approver relayed through the operator`.
+
+### Task 13: Public demo through a Cloudflare Tunnel
+
+**Files:**
+- Create: `app/serve.ts`, `app/gate.ts`, `app/public.ts`, `app/test/gate.test.ts`
+- Modify: `app/operator.ts` (faucet and deploy guards), `app/package.json` (`build`, `public` scripts), `README.md` ("Public demo" section)
+
+**Interfaces:**
+- Produces:
+  - `allowRpc(body: unknown, allowed: ReadonlySet<string>): boolean` — true only when every call (single or batch, at most 50) names an allowed method. `ETH_METHODS`: `eth_chainId, net_version, eth_blockNumber, eth_getBlockByNumber, eth_getBalance, eth_getCode, eth_getTransactionCount, eth_call, eth_estimateGas, eth_gasPrice, eth_maxPriorityFeePerGas, eth_feeHistory, eth_getLogs, eth_sendRawTransaction, eth_getTransactionReceipt, eth_getTransactionByHash`. `SIDECAR_METHODS`: `eth_sendFrameTransaction, eth_chainId`. Everything else is refused with 403, notably `ethrex_submitPrivilegedFrameTransaction` and any `debug_`, `admin_`, `txpool_`, `engine_` method.
+  - `serve.ts` on `127.0.0.1:8080`: `app/dist` with an SPA fallback; `/rpc` and `/sidecar` through `allowRpc`; `/canary` GET only; `/operator` passed through. `/device` is never served publicly.
+  - Operator guards: the faucet serves one address once per 10 minutes and at most 30 times an hour; `/deploy` only deploys a commitment whose stealth address already holds tUSDC (each deploy costs ~11M gas).
+  - `bun run public`: `vite build`, then the operator and `serve.ts`, then `cloudflared tunnel --url http://127.0.0.1:8080` wrapped in `systemd-inhibit --what=sleep:idle --why="postcurve public demo"`; prints the `https://….trycloudflare.com` URL and passes it to the services as `POSTCURVE_APP_ORIGINS`. If `cloudflared` is missing, print the install line and stop.
+
+- [ ] **Step 1: Write the failing tests** in `gate.test.ts`: `eth_call` allowed; `ethrex_submitPrivilegedFrameTransaction` refused; a batch of `[eth_call, debug_traceTransaction]` refused; a batch of 51 refused; a non-JSON body refused; `eth_sendFrameTransaction` allowed only with `SIDECAR_METHODS`. Faucet limiter: a second request for the same address within 10 minutes is refused; the 31st request in an hour is refused. Deploy guard: a commitment whose address holds no tUSDC is refused.
+- [ ] **Step 2: Run** `bun test test/gate.test.ts` — Expected: FAIL.
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run** `bun test` — Expected: PASS. Then `bun run public` — Expected: a trycloudflare URL; opening it on a phone shows the app; `curl -s -X POST <url>/rpc --data '{"jsonrpc":"2.0","id":1,"method":"ethrex_submitPrivilegedFrameTransaction","params":[]}'` gets 403.
+- [ ] **Step 5: Commit** `feat(app): public demo through a Cloudflare Tunnel`.
+

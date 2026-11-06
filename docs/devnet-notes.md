@@ -39,6 +39,15 @@ to the miner, and forwards `eth_*` reads and `eth_sendRawTransaction` to ethrex.
   Staking still relaxes the storage-access rules. **Ask the alt mempool team whether a hackathon
   devnet runs a raised budget**: the EF prize text names >100k verification (PQ wallets) as the
   target use case.
+- **What the spec says instead (ERC-8421 draft, ethereum/ERCs PR #2028, head `493ba8ac3b`,
+  updated 2026-10-01):** rule BUDGET-010 tracks the validation frames' `limits.execution` **per
+  entity** (sender, paymaster, factory). The `pre_verify` frame counts toward the approving entity
+  it precedes, and signature-validation cost counts toward the sender. Caps:
+  `MAX_VERIFY_GAS_PER_ENTITY = 100,000` (unstaked) and `MAX_VERIFY_GAS_STAKED_ENTITY = 1,000,000`
+  (staked). A staked bunker account therefore has room for a 2-of-3 quorum (~530k).
+- **Plan agreed with the alt mempool team (2026-11-06):** build against the local devnet first,
+  with our sidecar patched to implement BUDGET-010 as specified. Help with the public devnet may
+  come later.
 - **Privileged path:** `ethrex_submitPrivilegedFrameTransaction` mines frame txs without any
   mempool rules. It's useful locally, but it isn't alt mempool admission and doesn't count for
   the prize.

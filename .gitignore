@@ -28,3 +28,10 @@ managed_components/
 
 # Software device signer data (seed and used-key record)
 sdk/.device-signer/
+
+# browser app
+app/node_modules/
+app/dist/
+app/e2e/screens/
+app/test-results/
+app/playwright-report/

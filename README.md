@@ -55,6 +55,32 @@ PASS 10. paymaster paid the gas in ETH: 0.0024155 ETH
 PASS 11. replaying the same approvals is rejected: keys already used
 ```
 
+## Running the app
+
+The browser app (`app/`, design in [docs/ui-design.md](docs/ui-design.md)) runs against the local
+devnet. Four terminals:
+
+```sh
+# 1. the devnet, and the stealth contracts on it
+cd devnet && ./devnet.sh up
+cd ../contracts && forge build && cd ../sdk && bun install && bun scripts/deploy-stealth.ts
+
+# 2. the device approver (software stand-in for the Firefly): approve each request here with "y"
+cd sdk && bun scripts/device-signer.ts init   # once
+bun scripts/device-signer.ts serve            # 127.0.0.1:8790
+
+# 3. the canary service (for the Canary screen; see canary/README.md)
+cd canary && bun run tools/canary-service.ts --port 8787 --rpc http://127.0.0.1:18545 \
+  --watchlist watchlist/watchlist.devnet.json --data .state/demo
+
+# 4. the operator (sponsor deploys, Bob's test funds) and the app
+cd app && bun install && bun run dev          # http://localhost:5173
+```
+
+The app reaches every local service through the Vite proxy (`/rpc`, `/sidecar`, `/canary`,
+`/device`, `/operator`). The operator and the device bridge listen on 127.0.0.1 only and refuse
+requests from any other web page. `cd app && bun test` runs the app's unit tests.
+
 ## Parts
 
 | Part | What it does | Status |

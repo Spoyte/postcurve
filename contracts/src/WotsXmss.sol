@@ -69,11 +69,7 @@ library WotsXmss {
     }
 
     /// @dev Walks chain j of leaf l from position `start` to the public end (position 15).
-    function _chainUp(bytes32 pubSeed, uint256 l, uint256 j, uint256 start, bytes32 x)
-        private
-        pure
-        returns (bytes32)
-    {
+    function _chainUp(bytes32 pubSeed, uint256 l, uint256 j, uint256 start, bytes32 x) private pure returns (bytes32) {
         for (uint256 s = start; s < CHAIN_MAX; s++) {
             x = keccak256(abi.encode(DOMAIN_CHAIN, pubSeed, (l << 16) | (j << 8) | s, x));
         }

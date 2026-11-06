@@ -1,0 +1,13 @@
+{
+  "name": "postcurve-devnet-tools",
+  "private": true,
+  "type": "module",
+  "description": "Smoke tests for the local EIP-8141 devnet (../devnet.sh smoke)",
+  "scripts": {
+    "smoke": "bun run smoke.ts"
+  },
+  "dependencies": {
+    "@forshtat/hegota-support": "0.0.1",
+    "viem": "2.57.11"
+  }
+}

@@ -1,0 +1,234 @@
+# Local EIP-8141 (frame transaction) devnet: ethrex (EL) + Lighthouse (CL + VC)
+# + the alt-mempool sidecar.
+#
+# Adapted from forshtat/mempool-workshop-sidecar, deploy/devnet/docker-compose.yml
+# (MIT License, https://github.com/forshtat/mempool-workshop-sidecar). Changes
+# for a laptop:
+#   - static IPs on a pinned subnet, so the beacon nodes peer by multiaddr and
+#     there is no ENR/IP discovery step;
+#   - the one-shot genesis/key containers sit behind the "setup" profile, so a
+#     plain `up` never re-runs them (no --no-deps needed);
+#   - every host port binds 127.0.0.1 only, on an offset range (18545, 15052,
+#     14337); ethrex's privileged submission method is unauthenticated;
+#   - keys and the validator mnemonic are generated fresh per machine and only
+#     read from data/ (gitignored); nothing secret is in this file;
+#   - capped container logs; the sidecar runs as a container here too.
+#
+# Use ./devnet.sh rather than calling compose directly: it generates data/ and
+# data/compose.env first. `./devnet.sh compose <args>` passes through.
+
+name: postcurve-devnet
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+networks:
+  devnet:
+    ipam:
+      config:
+        - subnet: ${DEVNET_SUBNET_PREFIX:-172.31.81}.0/24
+
+services:
+  # One-shot: genesis.json (EL), genesis.ssz + config.yaml (CL) and the JWT
+  # secret into data/genesis. Reads data/config/values.env, which holds the
+  # validator mnemonic: its log (set -x) echoes it, so devnet.sh sends the log
+  # to data/logs/genesis.log and never prints it.
+  genesis:
+    image: ethpandaops/ethereum-genesis-generator:6.1.6
+    profiles: ["setup"]
+    logging: *logging
+    volumes:
+      - ./data/genesis:/data
+      - ./data/config/values.env:/config/values.env:ro
+    command: ["all"]
+
+  # One-shot: EIP-2335 keystores for the 32 genesis validators, derived from
+  # the same fresh mnemonic. --insecure = weak KDF params, fine for a devnet.
+  # --out-loc must not exist yet, hence the keystores/ subdirectory.
+  validator-keys:
+    image: protolambda/eth2-val-tools:latest
+    profiles: ["setup"]
+    logging: *logging
+    volumes:
+      - ./data/validator-keys:/data
+      - ./data/keys/validator.mnemonic:/secrets/validator.mnemonic:ro
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        exec /app/eth2-val-tools keystores --insecure
+        --source-mnemonic "$$(cat /secrets/validator.mnemonic)"
+        --source-min=0 --source-max=32 --out-loc=/data/keystores
+
+  ethrex:
+    image: ghcr.io/forshtat/ethrex:eip8141-tracer-latest
+    logging: *logging
+    networks:
+      devnet:
+        ipv4_address: ${DEVNET_SUBNET_PREFIX:-172.31.81}.10
+    volumes:
+      - ./data/genesis:/genesis:ro
+      - ./data/ethrex:/data
+    ports:
+      - "127.0.0.1:${DEVNET_RPC_PORT:-18545}:8545/tcp"
+    command:
+      - "--network=/genesis/metadata/genesis.json"
+      - "--datadir=/data"
+      - "--http.addr=0.0.0.0"
+      - "--http.port=8545"
+      - "--http.api=eth,net,web3,ethrex,debug,admin,txpool"
+      - "--authrpc.addr=0.0.0.0"
+      - "--authrpc.port=8551"
+      - "--authrpc.jwtsecret=/genesis/jwt/jwtsecret"
+      - "--log.level=info"
+      # snap sync never considers an isolated single node synced.
+      - "--syncmode=full"
+      - "--p2p.addr=0.0.0.0"
+      - "--p2p.port=30303"
+      - "--discovery.port=30303"
+
+  lighthouse-beacon:
+    image: ethpandaops/lighthouse:focil
+    logging: *logging
+    depends_on:
+      ethrex:
+        condition: service_started
+    networks:
+      devnet:
+        ipv4_address: ${DEVNET_SUBNET_PREFIX:-172.31.81}.11
+    volumes:
+      - ./data/genesis:/genesis:ro
+      - ./data/lighthouse-beacon:/data
+    ports:
+      - "127.0.0.1:${DEVNET_BEACON_PORT:-15052}:5052/tcp"
+    # The image has no curl/wget; bash's /dev/tcp is enough to see the API up.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/5052"]
+      interval: 3s
+      timeout: 2s
+      retries: 40
+    entrypoint: ["lighthouse"]
+    command:
+      - bn
+      - --testnet-dir=/genesis/metadata
+      - --datadir=/data
+      - --execution-endpoint=http://ethrex:8551
+      - --execution-jwt=/genesis/jwt/jwtsecret
+      - --debug-level=info
+      - --http
+      - --http-address=0.0.0.0
+      - --http-port=5052
+      - --listen-address=0.0.0.0
+      - --port=9000
+      - --supernode
+      - --allow-insecure-genesis-sync
+      - --ignore-ws-check
+      - --disable-upnp
+      # Without an explicit address the ENR has ip4: None inside a container.
+      - --enr-address=${DEVNET_SUBNET_PREFIX:-172.31.81}.11
+      # Dials beacon-2 too, so a restart of either node re-forms the pair.
+      - --boot-nodes=/ip4/${DEVNET_SUBNET_PREFIX:-172.31.81}.12/tcp/9000
+
+  # A passive second beacon node, no validators. A Lighthouse node with zero
+  # peers never leaves SyncState::Stalled, which blocks it from ever building
+  # a first block; this node exists only to be that peer (see upstream README).
+  lighthouse-beacon-2:
+    image: ethpandaops/lighthouse:focil
+    logging: *logging
+    depends_on:
+      lighthouse-beacon:
+        condition: service_healthy
+    networks:
+      devnet:
+        ipv4_address: ${DEVNET_SUBNET_PREFIX:-172.31.81}.12
+    volumes:
+      - ./data/genesis:/genesis:ro
+      - ./data/lighthouse-beacon-2:/data
+    entrypoint: ["lighthouse"]
+    command:
+      - bn
+      - --testnet-dir=/genesis/metadata
+      - --datadir=/data
+      - --execution-endpoint=http://ethrex:8551
+      - --execution-jwt=/genesis/jwt/jwtsecret
+      - --debug-level=info
+      - --http
+      - --http-address=0.0.0.0
+      - --http-port=5052
+      - --listen-address=0.0.0.0
+      - --port=9000
+      - --supernode
+      - --allow-insecure-genesis-sync
+      - --ignore-ws-check
+      - --disable-upnp
+      - --enr-address=${DEVNET_SUBNET_PREFIX:-172.31.81}.12
+      - --boot-nodes=/ip4/${DEVNET_SUBNET_PREFIX:-172.31.81}.11/tcp/9000
+
+  # lighthouse vc auto-discovers keystores under <datadir>/validators, so the
+  # eth2-val-tools output is mounted there (--validators-dir would conflict
+  # with --datadir).
+  lighthouse-validator:
+    image: ethpandaops/lighthouse:focil
+    logging: *logging
+    depends_on:
+      lighthouse-beacon:
+        condition: service_healthy
+    networks:
+      devnet:
+        ipv4_address: ${DEVNET_SUBNET_PREFIX:-172.31.81}.13
+    volumes:
+      - ./data/genesis:/genesis:ro
+      - ./data/lighthouse-validator:/data
+      - ./data/validator-keys/keystores/keys:/data/validators
+      - ./data/validator-keys/keystores/secrets:/data/secrets:ro
+    entrypoint: ["lighthouse"]
+    command:
+      - vc
+      - --testnet-dir=/genesis/metadata
+      - --datadir=/data
+      - --secrets-dir=/data/secrets
+      - --beacon-nodes=http://lighthouse-beacon:5052
+      - --init-slashing-protection
+      - --suggested-fee-recipient=${DEVNET_FEE_RECIPIENT:-0x0000000000000000000000000000000000000000}
+
+  # The alt-mempool sidecar ("miner" role: validates frame txs, relays them to
+  # ethrex with ethrex_submitPrivilegedFrameTransaction, marks them OnChain).
+  # data/sidecar/config.json holds the relayer key and the staking registry
+  # address; data/sidecar/sidecar.env holds SKANDHA_FAUCET_KEY and
+  # SKANDHA_ADMIN_KEY. Both are written by devnet.sh.
+  sidecar:
+    image: ghcr.io/forshtat/mempool-workshop-sidecar:latest
+    logging: *logging
+    depends_on:
+      ethrex:
+        condition: service_started
+    networks:
+      devnet:
+        ipv4_address: ${DEVNET_SUBNET_PREFIX:-172.31.81}.20
+    restart: on-failure:10   # it exits if ethrex is not answering yet
+    env_file:
+      - path: ./data/sidecar/sidecar.env
+        required: false
+    volumes:
+      - ./data/sidecar/config.json:/usr/app/config.json:ro
+      - ./data/sidecar/db:/usr/app/data
+    ports:
+      - "127.0.0.1:${DEVNET_SIDECAR_PORT:-14337}:14337/tcp"
+    command:
+      - node
+      - --configFile=/usr/app/config.json
+      - --dataDir=/usr/app/data
+      - --api.address=0.0.0.0
+      - --api.port=14337
+      - --api.wsPort=14337
+      - --p2p.host=0.0.0.0
+      - --p2p.enrHost=${DEVNET_SUBNET_PREFIX:-172.31.81}.20
+      - --p2p.port=4337
+      - --p2p.enrPort=4337
+      - --p2p.retainPeerId
+      # auto: only the auto-mode loop runs the reconciler that marks OnChain.
+      - --executor.bundlingMode=auto
+      - --redirectRpc
+      - --explorer.enable

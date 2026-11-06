@@ -1,0 +1,9 @@
+{
+  "name": "@postcurve/contracts",
+  "private": true,
+  "license": "MIT",
+  "dependencies": {
+    "@forshtat/hegota-support": "0.0.1",
+    "@openzeppelin/contracts": "^5.6.1"
+  }
+}

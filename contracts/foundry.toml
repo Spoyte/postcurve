@@ -7,3 +7,10 @@ solc_version = "0.8.28"
 optimizer = true
 optimizer_runs = 1000
 fs_permissions = [{ access = "read", path = "../spec/vectors" }]
+# Tests sign digests with the SDK through a test-only script (sdk/scripts/ffi-sign-fixture.ts).
+ffi = true
+remappings = [
+  "forge-std/=lib/forge-std/src/",
+  "@forshtat/hegota-support/=node_modules/@forshtat/hegota-support/",
+  "@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/",
+]

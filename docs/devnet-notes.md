@@ -1,5 +1,8 @@
 # EIP-8141 alt mempool devnet: working notes
 
+A local copy of this devnet (ethrex + Lighthouse + sidecar, chain 1337 on 127.0.0.1) runs
+from [`devnet/`](../devnet/README.md): `./devnet.sh up`.
+
 Gathered 2026-11-06 from the workshop repos. The devnet can be reset at any time; re-check
 before relying on an address.
 
@@ -27,8 +30,18 @@ to the miner, and forwards `eth_*` reads and `eth_sendRawTransaction` to ethrex.
 
 - **Canonical mempool:** `MAX_VERIFY_GAS` is 100,000 for the validation prefix. Hash-based
   quorum verification won't fit (one WOTS/XMSS approval cost ~318k gas in the May prototype).
-- **Standard alt mempool:** staked entities get `MAX_VERIFY_GAS_STAKED_ENTITY` instead of the
-  tighter unstaked per-entity cap. **The number is not yet confirmed; measure it.**
+- **Standard alt mempool: no bigger staked budget exists today.** The sidecar caps the
+  validation prefix at `MAX_VERIFY_GAS = 100,000` for every sender, staked or not
+  (`packages/executor/src/services/UserOpValidation/utils/validationPrefix.ts`, upstream
+  `2e22ff0`, 2026-10-25; confirmed on the local devnet, where a staked wallet's ~600k-gas
+  VERIFY frame was rejected). The cap applies to the *declared* `limits.execution` of the
+  prefix frames plus signature cost. `MAX_VERIFY_GAS_STAKED_ENTITY` appears only in design docs.
+  Staking still relaxes the storage-access rules. **Ask the alt mempool team whether a hackathon
+  devnet runs a raised budget**: the EF prize text names >100k verification (PQ wallets) as the
+  target use case.
+- **Privileged path:** `ethrex_submitPrivilegedFrameTransaction` mines frame txs without any
+  mempool rules. It's useful locally, but it isn't alt mempool admission and doesn't count for
+  the prize.
 - **Staking:** call `addStake(86400)` on the registry, sending more than `minStake` (0.01 ETH on
   the devnet; strictly greater is needed for the `BALANCE`/`SELFBALANCE` carve-out). Calling
   `unlockStake()` drops the staked carve-outs immediately.

@@ -33,7 +33,7 @@ The app must look good: it carries the pitch.
   2. **Receive** (~10s): Alice's private payment link and QR.
   3. **Pay** (~15s): Bob, in a second browser window, pays Alice's link.
   4. **Payments** (~15s): the scan finds Alice's payment and skips everyone else's.
-  5. **Spend** (~50s): two approvals in two places, the five frames lighting up, a "what everyone
+  5. **Spend** (~50s): two approvals in two places, the six frames lighting up, a "what everyone
      else sees" panel, the one-time keys this spend used.
   6. **Keys** (~20s): a 256-key grid per approver; "Try to reuse a key" sends the same spend
      again and shows the mempool refusing it, live.
@@ -130,9 +130,10 @@ approver keys, as design.md requires. Losing the viewing key costs privacy, neve
 
 **When the devnet is redeployed** *(builder's call made in design)*: stored payments and spends
 are keyed by chain id and paymaster address. If `stealth-deployment.json` no longer matches,
-the app says the devnet was redeployed and offers "start fresh", which clears payments, spends
-and the meta-address but keeps every used-key list: a used key stays used, which is always
-safe. Anything beyond that (recovering from a half-finished devnet reset) is out of scope.
+the app clears payments and spends and says so ("The devnet was redeployed: old payments were
+cleared. Your keys are unchanged."). It keeps the keys, identities, meta-address (it doesn't
+depend on the deployment) and every used-key list: a used key stays used, which is always safe.
+"Reset demo" in the sidebar wipes everything for a fresh setup. Anything beyond that (recovering from a half-finished devnet reset) is out of scope.
 
 **Key trees are slow to build** (~1.1 s each, measured in Bun): build them in a Web Worker,
 at setup and on every load (the browser approver's tree is rebuilt from its seed), with a
@@ -163,8 +164,8 @@ at setup and on every load (the browser approver's tree is rebuilt from its seed
   fee; the Pay screen asks for at least 1.00 tUSDC so a demo payment is always spendable. Steps, each shown
   as it happens: operator deploys the account if it has no code; browser approves; device
   approves (the screen waits on the bridge and says "approve in the device terminal"); the
-  frame transaction (same five frames and limits as `e2e-stealth.ts`) goes to the sidecar; the
-  five frames light up from the receipt's `frameReceipts`, with gas. Then:
+  frame transaction (same six frames and limits as `e2e-stealth.ts`) goes to the sidecar; the
+  six frames light up from the receipt's `frameReceipts`, with gas. Then:
   - **"What everyone else sees"**: the stealth account's public history (Bob's fresh account
     paid it; the operator deployed it; the spend), gas paid by the paymaster, 0 ETH ever held by
     the account, and the plain fact that this spend links the stealth account to the destination.

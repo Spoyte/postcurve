@@ -48,11 +48,11 @@ PASS 3. Bob paid 25 tUSDC to a fresh stealth address
 PASS 4. Alice's scan finds exactly her payment
 PASS 5. sponsor deployed the stealth account at the derived address
 PASS 6. the alt mempool sidecar admits the frame tx
-PASS 7. the frame tx is mined and every frame succeeded: block 2084, gasUsed 1145121, frames [0x1,0x1,0x1,0x1,0x1]
+PASS 7. the frame tx is mined and every frame succeeded: block 116, gasUsed 1207750, frames [0x1,0x1,0x1,0x1,0x1,0x1]
 PASS 8. destination received the transfer and the stealth account is empty: 24.5 tUSDC
 PASS 9. paymaster received its fee in tUSDC: 0.5
-PASS 10. paymaster paid the gas in ETH: 0.002290242 ETH
-PASS 11. replaying the same approvals is rejected
+PASS 10. paymaster paid the gas in ETH: 0.0024155 ETH
+PASS 11. replaying the same approvals is rejected: keys already used
 ```
 
 ## Parts

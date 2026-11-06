@@ -143,7 +143,7 @@ async function main() {
   };
   const transfer = (to: Address, amount: bigint) =>
     encodeFunctionData({ abi: TOKEN_ABI, functionName: "transfer", args: [to, amount] });
-  // [only_verify, pay (verifies the quorum), commit (atomic: keys + validUntil), transfer (atomic), fee]
+  // [only_verify, pay (verifies the quorum), commit (records the keys), checkDeadline (atomic), transfer (atomic), fee]
   const ATOMIC_BATCH = 0x04;
   const idHashes = [ids[0]!, ids[1]!].map((id) =>
     keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [id.root, id.pubSeed])),
@@ -152,7 +152,8 @@ async function main() {
   const frames = [
     ftx.frame(profile, "VERIFY", { target: null, scope: "EXECUTION", execution: 90_000n, data: encodeFunctionData({ abi: ACCOUNT_ABI, functionName: "verifyExecution" }) }),
     ftx.frame(profile, "VERIFY", { target: dep.paymaster, scope: "PAYMENT", execution: 990_000n, data: encodeFunctionData({ abi: PM_ABI, functionName: "approvePayment", args: [auth] }) }),
-    ftx.frame(profile, "DEFAULT", { target: dep.paymaster, flags: ATOMIC_BATCH, execution: 120_000n, state: 300_000n, data: encodeFunctionData({ abi: PM_ABI, functionName: "commit", args: [idHashes, leaves, approval.validUntil] }) }),
+    ftx.frame(profile, "DEFAULT", { target: dep.paymaster, execution: 120_000n, state: 300_000n, data: encodeFunctionData({ abi: PM_ABI, functionName: "commit", args: [idHashes, leaves] }) }),
+    ftx.frame(profile, "DEFAULT", { target: dep.paymaster, flags: ATOMIC_BATCH, execution: 60_000n, data: encodeFunctionData({ abi: PM_ABI, functionName: "checkDeadline", args: [approval.validUntil] }) }),
     ftx.frame(profile, "SENDER", { target: dep.token, flags: ATOMIC_BATCH, execution: 80_000n, state: 200_000n, data: transfer(destination, approval.amount) }),
     ftx.frame(profile, "SENDER", { target: dep.token, execution: 80_000n, state: 200_000n, data: transfer(dep.paymaster, fee) }),
   ];
@@ -175,6 +176,7 @@ async function main() {
     if (!receipt) await new Promise((r) => setTimeout(r, 2000));
   }
   const frameStatuses = (receipt?.frameReceipts ?? []).map((f: any) => f.status).join(",");
+  console.log(`      frame gas used: ${(receipt?.frameReceipts ?? []).map((f: any) => Number(f.gasUsed)).join(", ")}`);
   check(receipt?.status === "0x1" && (receipt.frameReceipts ?? []).every((f: any) => f.status === "0x1"), "the frame tx is mined and every frame succeeded", `block ${Number(receipt?.blockNumber)}, gasUsed ${Number(receipt?.gasUsed)}, frames [${frameStatuses}]`);
   const [dst, pmTok, left] = await Promise.all([balance(dep.token, destination), balance(dep.token, dep.paymaster), balance(dep.token, stealth)]);
   check(dst === approval.amount && left === 0n, "destination received the transfer and the stealth account is empty", `${formatUnits(dst, 6)} tUSDC`);
@@ -192,7 +194,9 @@ async function main() {
     replayRejected = true;
     reason = e instanceof Error ? e.message.slice(0, 200) : String(e);
   }
-  check(replayRejected, "replaying the same approvals is rejected", reason);
+  // Rejected(4): the paymaster's register already holds these one-time keys
+  const KEYS_USED = `0x94064f91${(4).toString(16).padStart(64, "0")}`;
+  check(replayRejected && reason.includes(KEYS_USED), "replaying the same approvals is rejected: keys already used", reason);
   console.log(`\nspend tx ${hash}`);
 }
 

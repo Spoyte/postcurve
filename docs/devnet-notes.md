@@ -73,11 +73,19 @@ budget turns out tighter.
 ### End-to-end stealth spend (2026-11-06)
 
 `cd sdk && bun scripts/deploy-stealth.ts && bun scripts/e2e-stealth.ts`: admitted by the patched
-sidecar, mined in block 2084, total gasUsed 1,145,121, all five frames succeeded. The paymaster's
-`pay` frame (2-of-3 WOTS/XMSS check) used 555,721, well inside the staked 1,000,000 budget. The
-Foundry figure for the same call (~1.04M) is inflated by the test mocks.
+sidecar, all six frames succeeded. First run 2026-11-06 (five frames): block 2084, gasUsed 1,145,121.
+After the review fixes (six frames, bounded paymaster, 2026-11-06 on a fresh devnet): block 116,
+gasUsed 1,207,750; per frame only_verify 33,164, pay 606,382 (2-of-3 WOTS/XMSS check plus the
+paymaster's bounds, inside the staked 1,000,000 budget), commit 35,176, checkDeadline 9,964,
+transfer 25,337, fee 15,337; the paymaster paid 0.0024 ETH. The replay is refused with
+`Rejected(4)` (keys already used). The Foundry figure for `approvePayment` (~1.13M) is inflated
+by the test mocks.
 
 Lessons from getting there:
+- A laptop sleep stalls this devnet: after ~3 h without blocks Lighthouse kept proposing for past
+  slots and never caught up, even after a restart. `SIDECAR_IMAGE=postcurve/sidecar:budget010
+  ./devnet.sh reset` then `deploy-stealth.ts` is the quick way back (the env var keeps the patched
+  sidecar; re-add the `SIDECAR_IMAGE=` line to `data/compose.env` afterwards).
 - ethrex's `ethrex_simulateFrameTransaction` (the sidecar requires its ERC-7562 trace) only
   recognizes EIP-8141's four prefix shapes. It rejects ERC-8421's `pre_verify` and, on this
   revision, an `expiry_verify` frame to the undeployed `EXPIRY_VERIFIER`, both with "frame

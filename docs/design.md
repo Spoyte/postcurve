@@ -77,29 +77,40 @@ model custodians already use. A nice-to-have for the pitch; drop it if it costs 
 ## How a spend works
 
 A spend from a stealth bunker account is one frame transaction (EIP-8141), as built and admitted
-on the local devnet (2026-11-06, measured gas in brackets):
+on the local devnet (measured gas in brackets, from the e2e run noted in devnet-notes.md):
 
 ```
-[only_verify]     stealth account: checks the frame layout, approves execution     (unstaked ≤ 100k; 29,766)
-[pay]             paymaster: verifies the 2-of-3 hash-only quorum, approves payment (staked ≤ 1M; 555,721)
-[commit]          paymaster, atomic: records the one-time keys, enforces validUntil (32,293)
-[sender]          atomic: token.transfer(destination, amount)                      (30,237)
-[sender]          token.transfer(paymaster, fee)                                   (15,337)
+[only_verify]     stealth account: checks the frame layout, approves execution     (unstaked ≤ 100k; 33,164)
+[pay]             paymaster: verifies the 2-of-3 hash-only quorum, approves payment (staked ≤ 1M; 606,382)
+[commit]          paymaster: records the one-time keys                             (35,176)
+[checkDeadline]   paymaster, opens the atomic batch: enforces validUntil           (9,964)
+[sender]          atomic: token.transfer(destination, amount)                      (25,337)
+[sender]          ends the batch: token.transfer(paymaster, fee)                   (15,337)
 ```
 
 A fresh stealth account holds only tokens, so it can't stake and stays under the 100,000-gas
 unstaked budget. The staked paymaster's budget (up to 1,000,000 under ERC-8421 BUDGET-010, which
 our sidecar patch implements) carries the quorum check in its `pay` frame. `pay` is a VERIFY
 frame (a static call), so it can't record the keys itself: it requires the next frame to be
-`commit` for exactly the keys it verified, in one atomic batch with both transfers. `commit` only
-runs after this paymaster's own `pay` succeeded in the same tx. If the paymaster doesn't approve
-payment, the whole transaction is invalid and nothing executes.
+`commit` for exactly the keys it verified, with enough gas to always finish. `commit` runs
+outside the atomic batch, so the keys are recorded even if the transfers fail: an approval is
+used once, whatever happens next. `checkDeadline` opens the atomic batch with both transfers: an
+expired approval burns its keys, moves nothing, and costs the paymaster one transaction. Each
+paymaster frame checks that the frame before it is the expected call on this paymaster and
+succeeded (`commit` after `approvePayment`, `checkDeadline` after `commit`), so nobody can record
+someone else's keys. If the paymaster doesn't approve payment, the whole transaction is invalid
+and nothing executes.
+
+What the paymaster agrees to pay is bounded, because a frame transaction carries no signature
+over its gas fields: it sponsors spends of its fee token only (tUSDC), for at least 0.50 tUSDC,
+in transactions whose maximum ETH cost (TXPARAM `MAX_COST`) is at most 0.01 ETH, with no ETH
+value in any frame, and only when the account holds the amount plus the fee.
 
 Two things differ from the first draft because of what this devnet's ethrex supports:
 - **No `pre_verify` frame.** That frame is an ERC-8421 addition. ethrex's validation trace,
   which the sidecar requires, only recognizes EIP-8141's four shapes.
 - **No `expiry_verify` frame.** This ethrex's EIP-8141 revision predates it, and TIMESTAMP is
-  banned during validation. `commit` enforces `validUntil` instead, during execution.
+  banned during validation. `checkDeadline` enforces `validUntil` instead, during execution.
 
 The stealth account is deployed by a sponsor in a separate transaction just before the spend.
 Its ~7 KB of code costs ~10.9M gas in EIP-8037 state gas, far beyond what a deploy frame inside

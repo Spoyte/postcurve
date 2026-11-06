@@ -23,6 +23,8 @@ import { privateKeyToAccount } from "viem/accounts";
 
 const root = (p: string) => fileURLToPath(new URL(`../../${p}`, import.meta.url));
 export const DEPLOYMENT_PATH = root("devnet/data/stealth-deployment.json");
+export const PAYMASTER_MIN_FEE = 500_000n; // 0.50 tUSDC
+export const PAYMASTER_MAX_SPONSORED_WEI = parseEther("0.01");
 
 export type StealthDeployment = {
   chainId: number;
@@ -89,8 +91,14 @@ async function main() {
   }
 
   const frameOps = await deploy("FrameOps.sol", "FrameOps");
-  const paymaster = await deploy("PostcurvePaymaster.sol", "PostcurvePaymaster", [frameOps, registry], 50_000_000n);
   const token = await deploy("TestUSDC.sol", "TestUSDC");
+  // the paymaster sponsors tUSDC spends only, for at least 0.50 tUSDC, at most 0.01 ETH of gas per tx
+  const paymaster = await deploy(
+    "PostcurvePaymaster.sol",
+    "PostcurvePaymaster",
+    [frameOps, registry, token, PAYMASTER_MIN_FEE, PAYMASTER_MAX_SPONSORED_WEI],
+    50_000_000n,
+  );
   const announcer = await deploy("ERC5564Announcer.sol", "ERC5564Announcer");
 
   const pm = artifact("PostcurvePaymaster.sol", "PostcurvePaymaster");

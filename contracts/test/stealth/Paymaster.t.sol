@@ -11,30 +11,39 @@ import {StealthBunkerAccount} from "../../src/stealth/StealthBunkerAccount.sol";
 import {StealthProfile} from "../../src/stealth/StealthProfile.sol";
 import {TransferApproval} from "../../src/stealth/TransferApproval.sol";
 
-/// Spend layout: [only_verify(0, account), pay(1, PM), commit(2, PM, atomic), transfer(3, token, atomic),
-///                fee(4, token)]
+/// Spend layout: [only_verify(0, account), pay(1, PM), commit(2, PM), checkDeadline(3, PM, atomic),
+///                transfer(4, token, atomic), fee(5, token)]; the atomic batch is frames 3..5.
 contract PaymasterTest is FrameTestBase {
     address constant ENTRY_POINT = address(0xaa);
     uint256 constant PAY = 1;
     uint256 constant COMMIT = 2;
+    uint256 constant DEADLINE = 3;
+    uint256 constant TRANSFER = 4;
+    uint256 constant FEE = 5;
+    uint256 constant MIN_FEE = 5e5;
+    uint256 constant MAX_SPONSORED_WEI = 0.01 ether;
     PostcurvePaymaster pm;
     StealthBunkerAccount account;
     TokenForTests token;
+    address layoutToken;
     address recipient = address(0xbeef);
 
     function setUp() public {
         setUpFrames();
-        pm = new PostcurvePaymaster(IFrameOps(address(ops)), address(0x5eed));
+        token = new TokenForTests();
+        pm = new PostcurvePaymaster(
+            IFrameOps(address(ops)), address(0x5eed), IERC20(address(token)), MIN_FEE, MAX_SPONSORED_WEI
+        );
         bytes32 c = StealthProfile.commitment(StealthProfile.spendKey(2, testIds()), testOpener());
         account = StealthBunkerAccount(payable(pm.FACTORY().deploy(c)));
-        token = new TokenForTests();
         token.mint(address(account), 25e6);
+        layoutToken = address(token);
     }
 
     function approval() internal view returns (TransferApproval.Data memory) {
         return TransferApproval.Data({
             nonce: 0,
-            token: address(token),
+            token: layoutToken,
             to: recipient,
             amount: 24e6,
             maxFee: 1e6,
@@ -87,17 +96,23 @@ contract PaymasterTest is FrameTestBase {
         uint64 deadline
     ) internal {
         txp(TX_SENDER, uint256(uint160(address(account))));
-        txp(TX_FRAME_COUNT, 5);
+        txp(TX_FRAME_COUNT, 6);
+        txp(TX_MAX_COST, 0.005 ether);
         frame(0, MODE_VERIFY, address(account));
         frame(PAY, MODE_VERIFY, address(pm));
+        setData(PAY, abi.encodePacked(PostcurvePaymaster.approvePayment.selector));
         frame(COMMIT, MODE_DEFAULT, address(pm));
-        frameFlags(COMMIT, FLAG_ATOMIC);
-        setData(COMMIT, abi.encodeCall(PostcurvePaymaster.commit, (h, l, deadline)));
-        frame(3, MODE_SENDER, address(token));
-        frameFlags(3, FLAG_ATOMIC);
-        setData(3, abi.encodeCall(IERC20.transfer, (to, amount)));
-        frame(4, MODE_SENDER, address(token));
-        setData(4, abi.encodeCall(IERC20.transfer, (address(pm), fee)));
+        setData(COMMIT, abi.encodeCall(PostcurvePaymaster.commit, (h, l)));
+        frameParamSet(COMMIT, FP_EXECUTION_GAS_LIMIT, 120_000);
+        frameParamSet(COMMIT, FP_STATE_GAS_LIMIT, 300_000);
+        frame(DEADLINE, MODE_DEFAULT, address(pm));
+        frameFlags(DEADLINE, FLAG_ATOMIC);
+        setData(DEADLINE, abi.encodeCall(PostcurvePaymaster.checkDeadline, (deadline)));
+        frame(TRANSFER, MODE_SENDER, layoutToken);
+        frameFlags(TRANSFER, FLAG_ATOMIC);
+        setData(TRANSFER, abi.encodeCall(IERC20.transfer, (to, amount)));
+        frame(FEE, MODE_SENDER, layoutToken);
+        setData(FEE, abi.encodeCall(IERC20.transfer, (address(pm), fee)));
     }
 
     /// A valid spend's layout for `s` signed at `leafA`, `leafB`.
@@ -119,6 +134,10 @@ contract PaymasterTest is FrameTestBase {
         txp(TX_CURRENT_FRAME_INDEX, COMMIT);
     }
 
+    function atDeadline() internal {
+        txp(TX_CURRENT_FRAME_INDEX, DEADLINE);
+    }
+
     function expectPayRejected(PostcurvePaymaster.SpendAuth memory s) internal {
         atPay();
         vm.prank(ENTRY_POINT);
@@ -126,7 +145,18 @@ contract PaymasterTest is FrameTestBase {
         pm.approvePayment(s);
     }
 
-    /// pay, then commit, as the protocol would run them.
+    function expectPayRejectedWith(PostcurvePaymaster.SpendAuth memory s, uint256 reason) internal {
+        atPay();
+        vm.prank(ENTRY_POINT);
+        vm.expectRevert(abi.encodeWithSelector(PostcurvePaymaster.Rejected.selector, reason));
+        pm.approvePayment(s);
+    }
+
+    function expectRejectedWith(uint256 reason) internal {
+        vm.expectRevert(abi.encodeWithSelector(PostcurvePaymaster.Rejected.selector, reason));
+    }
+
+    /// pay, then commit, then the deadline check, as the protocol would run them.
     function spend(PostcurvePaymaster.SpendAuth memory s, uint256 leafA, uint256 leafB) internal {
         atPay();
         vm.prank(ENTRY_POINT);
@@ -135,7 +165,11 @@ contract PaymasterTest is FrameTestBase {
         atCommit();
         (bytes32[] memory h, uint256[] memory l) = keysOf(s, leafA, leafB);
         vm.prank(ENTRY_POINT);
-        pm.commit(h, l, s.approval.validUntil);
+        pm.commit(h, l);
+        frameStatus(COMMIT, 1);
+        atDeadline();
+        vm.prank(ENTRY_POINT);
+        pm.checkDeadline(s.approval.validUntil);
     }
 
     // ---------------------------------------------------------------- happy path
@@ -154,9 +188,13 @@ contract PaymasterTest is FrameTestBase {
         atCommit();
         (bytes32[] memory h, uint256[] memory l) = keysOf(s, 1, 2);
         vm.prank(ENTRY_POINT);
-        pm.commit(h, l, s.approval.validUntil);
+        pm.commit(h, l);
         assertTrue(pm.isLeafUsed(h[0], 1));
         assertTrue(pm.isLeafUsed(h[1], 2));
+        frameStatus(COMMIT, 1);
+        atDeadline();
+        vm.prank(ENTRY_POINT);
+        pm.checkDeadline(s.approval.validUntil);
     }
 
     function test_neverReadsTheClock() public {
@@ -196,6 +234,16 @@ contract PaymasterTest is FrameTestBase {
         expectPayRejected(s);
     }
 
+    /// A replay after the account was emptied is refused for its used keys, so the reason shown is the true one.
+    function test_aReplayIsRefusedForItsUsedKeysEvenWhenTheAccountIsEmpty() public {
+        PostcurvePaymaster.SpendAuth memory s = auth(approval(), 58, 59, 5e5);
+        goodLayout(s, 58, 59);
+        spend(s, 58, 59);
+        vm.prank(address(account));
+        IERC20(address(token)).transfer(recipient, 25e6);
+        expectPayRejectedWith(s, 4);
+    }
+
     function test_rejectsKeysSpentThroughTheEmergencyPath() public {
         TransferApproval.Data memory a = approval();
         a.maxFee = 0;
@@ -214,16 +262,11 @@ contract PaymasterTest is FrameTestBase {
         e.envelopes[1] = sign(3, 12, digest);
         vm.prank(ENTRY_POINT);
         account.emergencyExecute(e);
-        PostcurvePaymaster.SpendAuth memory s;
-        s.threshold = 2;
-        s.ids = e.ids;
-        s.opener = e.opener;
-        s.approval = a;
-        s.signerIdx = e.signerIdx;
-        s.envelopes = e.envelopes;
-        s.fee = 0;
+        TransferApproval.Data memory b = approval();
+        b.amount = 23e6; // the emergency spend moved 1 of the 25 held
+        PostcurvePaymaster.SpendAuth memory s = auth(b, 11, 12, 5e5);
         goodLayout(s, 11, 12);
-        expectPayRejected(s);
+        expectPayRejectedWith(s, 5);
     }
 
     function test_rejectsAWrongOpener() public {
@@ -292,35 +335,43 @@ contract PaymasterTest is FrameTestBase {
         expectPayRejected(s);
     }
 
-    function test_rejectsACommitFrameOutsideTheAtomicBatch() public {
+    function test_rejectsACommitFrameInsideTheAtomicBatch() public {
         PostcurvePaymaster.SpendAuth memory s = auth(approval(), 32, 33, 5e5);
         goodLayout(s, 32, 33);
-        frameFlags(COMMIT, 0);
+        frameFlags(COMMIT, FLAG_ATOMIC);
+        expectPayRejected(s);
+    }
+
+    function test_rejectsADeadlineCheckOutsideTheAtomicBatch() public {
+        PostcurvePaymaster.SpendAuth memory s = auth(approval(), 42, 43, 5e5);
+        goodLayout(s, 42, 43);
+        frameFlags(DEADLINE, 0);
         expectPayRejected(s);
     }
 
     function test_rejectsATransferOutsideTheAtomicBatch() public {
         PostcurvePaymaster.SpendAuth memory s = auth(approval(), 34, 35, 5e5);
         goodLayout(s, 34, 35);
-        frameFlags(3, 0);
+        frameFlags(TRANSFER, 0);
         expectPayRejected(s);
     }
 
     function test_rejectsAnExtraFrame() public {
         PostcurvePaymaster.SpendAuth memory s = auth(approval(), 36, 37, 5e5);
         goodLayout(s, 36, 37);
-        txp(TX_FRAME_COUNT, 6);
+        txp(TX_FRAME_COUNT, 7);
         expectPayRejected(s);
     }
 
-    function test_rejectsACommitFrameWithAnotherDeadline() public {
+    function test_rejectsADeadlineCheckWithAnotherDeadline() public {
         PostcurvePaymaster.SpendAuth memory s = auth(approval(), 38, 39, 5e5);
         (bytes32[] memory h, uint256[] memory l) = keysOf(s, 38, 39);
         layoutWithDeadline(recipient, s.approval.amount, s.fee, h, l, s.approval.validUntil + 1);
         expectPayRejected(s);
     }
 
-    function test_commitRejectsAnExpiredApproval() public {
+    /// Review finding 3: an expired approval must cost the paymaster one transaction, not one per replay.
+    function test_anExpiredApprovalBurnsTheKeysAndStopsTheTransfers() public {
         PostcurvePaymaster.SpendAuth memory s = auth(approval(), 40, 41, 5e5);
         goodLayout(s, 40, 41);
         atPay();
@@ -331,8 +382,70 @@ contract PaymasterTest is FrameTestBase {
         atCommit();
         (bytes32[] memory h, uint256[] memory l) = keysOf(s, 40, 41);
         vm.prank(ENTRY_POINT);
-        vm.expectRevert();
-        pm.commit(h, l, s.approval.validUntil);
+        pm.commit(h, l);
+        frameStatus(COMMIT, 1);
+        atDeadline();
+        vm.prank(ENTRY_POINT);
+        expectRejectedWith(2);
+        pm.checkDeadline(s.approval.validUntil);
+        assertTrue(pm.isLeafUsed(h[0], 40));
+        assertTrue(pm.isLeafUsed(h[1], 41));
+        expectPayRejected(s);
+    }
+
+    // ---------------------------------------------------------------- what the paymaster agrees to pay
+
+    /// Review finding 2: only the fee token, at least the minimum fee, a capped ETH cost, no ETH value.
+    function test_rejectsASpendOfAnotherToken() public {
+        TokenForTests other = new TokenForTests();
+        other.mint(address(account), 25e6);
+        layoutToken = address(other);
+        PostcurvePaymaster.SpendAuth memory s = auth(approval(), 44, 45, 5e5);
+        goodLayout(s, 44, 45);
+        expectPayRejectedWith(s, 17);
+    }
+
+    function test_rejectsAFeeBelowTheMinimum() public {
+        PostcurvePaymaster.SpendAuth memory s = auth(approval(), 46, 47, MIN_FEE - 1);
+        goodLayout(s, 46, 47);
+        expectPayRejectedWith(s, 18);
+    }
+
+    function test_rejectsATxThatMayCostMoreThanTheCap() public {
+        PostcurvePaymaster.SpendAuth memory s = auth(approval(), 48, 49, 5e5);
+        goodLayout(s, 48, 49);
+        txp(TX_MAX_COST, MAX_SPONSORED_WEI + 1);
+        expectPayRejectedWith(s, 19);
+    }
+
+    function test_rejectsAFrameThatCarriesEth() public {
+        PostcurvePaymaster.SpendAuth memory s = auth(approval(), 50, 51, 5e5);
+        goodLayout(s, 50, 51);
+        frameParamSet(TRANSFER, FP_VALUE, 1);
+        expectPayRejectedWith(s, 22);
+    }
+
+    function test_rejectsACommitFrameWithTooLittleExecutionGas() public {
+        PostcurvePaymaster.SpendAuth memory s = auth(approval(), 52, 53, 5e5);
+        goodLayout(s, 52, 53);
+        frameParamSet(COMMIT, FP_EXECUTION_GAS_LIMIT, 1);
+        expectPayRejectedWith(s, 21);
+    }
+
+    function test_rejectsACommitFrameWithTooLittleStateGas() public {
+        PostcurvePaymaster.SpendAuth memory s = auth(approval(), 54, 55, 5e5);
+        goodLayout(s, 54, 55);
+        frameParamSet(COMMIT, FP_STATE_GAS_LIMIT, 1);
+        expectPayRejectedWith(s, 21);
+    }
+
+    /// Review finding 3: a spend the account can't cover would unroll after the paymaster paid.
+    function test_rejectsWhenTheAccountCannotCoverAmountAndFee() public {
+        TransferApproval.Data memory a = approval();
+        a.amount = 25e6 - 4e5; // + 0.5 fee > 25 held
+        PostcurvePaymaster.SpendAuth memory s = auth(a, 56, 57, 5e5);
+        goodLayout(s, 56, 57);
+        expectPayRejectedWith(s, 20);
     }
 
     // ---------------------------------------------------------------- commit
@@ -344,44 +457,116 @@ contract PaymasterTest is FrameTestBase {
         l[0] = 7;
     }
 
-    function test_commitRejectsWithoutASuccessfulPayFrame() public {
+    function payFrame(uint256 status, bytes memory data) internal {
         frame(PAY, MODE_VERIFY, address(pm));
-        frameStatus(PAY, 0);
+        frameStatus(PAY, status);
+        setData(PAY, data);
+    }
+
+    function approvePaymentCall() internal pure returns (bytes memory) {
+        return abi.encodePacked(PostcurvePaymaster.approvePayment.selector);
+    }
+
+    function test_commitRejectsWithoutASuccessfulPayFrame() public {
+        payFrame(0, approvePaymentCall());
         atCommit();
         (bytes32[] memory h, uint256[] memory l) = commitKeys();
         vm.prank(ENTRY_POINT);
         vm.expectRevert();
-        pm.commit(h, l, uint64(block.timestamp + 1 hours));
+        pm.commit(h, l);
     }
 
     function test_commitRejectsWhenThePayFrameIsAnotherPaymasters() public {
         frame(PAY, MODE_VERIFY, address(0xbad));
         frameStatus(PAY, 1);
+        setData(PAY, approvePaymentCall());
         atCommit();
         (bytes32[] memory h, uint256[] memory l) = commitKeys();
         vm.prank(ENTRY_POINT);
         vm.expectRevert();
-        pm.commit(h, l, uint64(block.timestamp + 1 hours));
+        pm.commit(h, l);
+    }
+
+    /// Review finding 1: a successful VERIFY frame to this paymaster that isn't `approvePayment` (any view
+    /// function succeeds there) must not let `commit` record someone else's keys.
+    function test_commitRejectsAfterAPaymasterViewCallInVerifyMode() public {
+        payFrame(1, abi.encodeCall(PostcurvePaymaster.isLeafUsed, (bytes32(0), 0)));
+        atCommit();
+        (bytes32[] memory h, uint256[] memory l) = commitKeys();
+        vm.prank(ENTRY_POINT);
+        expectRejectedWith(23);
+        pm.commit(h, l);
+        assertFalse(pm.isLeafUsed(h[0], l[0]));
+    }
+
+    function test_commitRejectsAfterAPayFrameWithNoData() public {
+        payFrame(1, "");
+        atCommit();
+        (bytes32[] memory h, uint256[] memory l) = commitKeys();
+        vm.prank(ENTRY_POINT);
+        expectRejectedWith(23);
+        pm.commit(h, l);
     }
 
     function test_commitRejectsCallersOtherThanTheEntryPoint() public {
-        frame(PAY, MODE_VERIFY, address(pm));
-        frameStatus(PAY, 1);
+        payFrame(1, approvePaymentCall());
         atCommit();
         (bytes32[] memory h, uint256[] memory l) = commitKeys();
         vm.expectRevert();
-        pm.commit(h, l, uint64(block.timestamp + 1 hours));
+        pm.commit(h, l);
     }
 
     function test_commitRejectsKeysAlreadyRecorded() public {
-        frame(PAY, MODE_VERIFY, address(pm));
-        frameStatus(PAY, 1);
+        payFrame(1, approvePaymentCall());
         atCommit();
         (bytes32[] memory h, uint256[] memory l) = commitKeys();
         vm.prank(ENTRY_POINT);
-        pm.commit(h, l, uint64(block.timestamp + 1 hours));
+        pm.commit(h, l);
         vm.prank(ENTRY_POINT);
         vm.expectRevert();
-        pm.commit(h, l, uint64(block.timestamp + 1 hours));
+        pm.commit(h, l);
+    }
+
+    // ---------------------------------------------------------------- checkDeadline
+
+    function commitFrame(uint256 status, bytes memory data) internal {
+        frame(COMMIT, MODE_DEFAULT, address(pm));
+        frameStatus(COMMIT, status);
+        setData(COMMIT, data);
+    }
+
+    function commitCall() internal pure returns (bytes memory) {
+        (bytes32[] memory h, uint256[] memory l) = commitKeys();
+        return abi.encodeCall(PostcurvePaymaster.commit, (h, l));
+    }
+
+    function test_checkDeadlinePassesAfterASuccessfulCommit() public {
+        commitFrame(1, commitCall());
+        atDeadline();
+        vm.prank(ENTRY_POINT);
+        pm.checkDeadline(uint64(block.timestamp));
+    }
+
+    function test_checkDeadlineRejectsWhenTheCommitFailed() public {
+        commitFrame(0, commitCall());
+        atDeadline();
+        vm.prank(ENTRY_POINT);
+        expectRejectedWith(9);
+        pm.checkDeadline(uint64(block.timestamp + 1 hours));
+    }
+
+    function test_checkDeadlineRejectsAfterAnotherCall() public {
+        commitFrame(1, abi.encodeCall(PostcurvePaymaster.isLeafUsed, (bytes32(0), 0)));
+        atDeadline();
+        vm.prank(ENTRY_POINT);
+        expectRejectedWith(24);
+        pm.checkDeadline(uint64(block.timestamp + 1 hours));
+    }
+
+    function test_checkDeadlineRejectsCallersOtherThanTheEntryPoint() public {
+        commitFrame(1, commitCall());
+        atDeadline();
+        vm.expectRevert();
+        pm.checkDeadline(uint64(block.timestamp + 1 hours));
     }
 }

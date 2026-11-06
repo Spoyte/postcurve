@@ -21,8 +21,9 @@ interface IPostcurvePaymaster {
 ///         a sender can compute its address before it exists. Immutable: no owner, admin or upgrade.
 ///
 ///         Main path: `verifyExecution` is the `only_verify` frame. It only checks that the paymaster
-///         bound here pays (its `pay` frame verifies the quorum) and records the one-time keys (`commit`),
-///         and that execution is two token transfers; the paymaster checks signatures and details.
+///         bound here pays (its `pay` frame verifies the quorum), records the one-time keys (`commit`) and
+///         checks the deadline (`checkDeadline`), and that execution is two token transfers; the paymaster
+///         checks signatures and details.
 ///         Emergency path: `emergencyExecute` verifies the quorum itself, for when the paymaster is
 ///         unavailable. It costs privacy (someone must sponsor the gas), never funds.
 contract StealthBunkerAccount {
@@ -61,17 +62,18 @@ contract StealthBunkerAccount {
 
     receive() external payable {}
 
-    /// @notice `only_verify`: approves execution only for
-    ///         [.., only_verify(this), pay(PAYMASTER), commit(PAYMASTER), sender(token), sender(token)].
+    /// @notice `only_verify`: approves execution only for [.., only_verify(this), pay(PAYMASTER),
+    ///         commit(PAYMASTER), checkDeadline(PAYMASTER), sender(token), sender(token)].
     function verifyExecution() external {
         if (msg.sender != ENTRY_POINT) revert NotEntryPoint(msg.sender);
         uint256 i = FRAME_OPS.txParam(TxParam.CURRENT_FRAME_INDEX);
-        if (FRAME_OPS.txParam(TxParam.FRAME_COUNT) != i + 5) revert BadFrameShape(1);
+        if (FRAME_OPS.txParam(TxParam.FRAME_COUNT) != i + 6) revert BadFrameShape(1);
         if (_mode(i + 1) != FrameMode.VERIFY || FRAME_OPS.frameTarget(i + 1) != PAYMASTER) revert BadFrameShape(2);
         if (_mode(i + 2) != FrameMode.DEFAULT || FRAME_OPS.frameTarget(i + 2) != PAYMASTER) revert BadFrameShape(3);
-        address token = FRAME_OPS.frameTarget(i + 3);
-        if (_mode(i + 3) != FrameMode.SENDER || _mode(i + 4) != FrameMode.SENDER) revert BadFrameShape(4);
-        if (FRAME_OPS.frameTarget(i + 4) != token) revert BadFrameShape(5);
+        if (_mode(i + 3) != FrameMode.DEFAULT || FRAME_OPS.frameTarget(i + 3) != PAYMASTER) revert BadFrameShape(6);
+        address token = FRAME_OPS.frameTarget(i + 4);
+        if (_mode(i + 4) != FrameMode.SENDER || _mode(i + 5) != FrameMode.SENDER) revert BadFrameShape(4);
+        if (FRAME_OPS.frameTarget(i + 5) != token) revert BadFrameShape(5);
         FRAME_OPS.approve(Scope.EXECUTION);
     }
 

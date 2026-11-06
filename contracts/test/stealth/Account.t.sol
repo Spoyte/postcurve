@@ -72,15 +72,16 @@ contract AccountTest is FrameTestBase {
 
     // ---------------------------------------------------------------- verifyExecution
 
-    /// [only_verify(0), pay(1, PM), commit(2, PM), sender(3, token), sender(4, token)]
+    /// [only_verify(0), pay(1, PM), commit(2, PM), checkDeadline(3, PM), sender(4, token), sender(5, token)]
     function goodShape() internal {
         txp(TX_CURRENT_FRAME_INDEX, 0);
-        txp(TX_FRAME_COUNT, 5);
+        txp(TX_FRAME_COUNT, 6);
         frame(0, MODE_VERIFY, address(account));
         frame(1, MODE_VERIFY, address(paymaster));
         frame(2, MODE_DEFAULT, address(paymaster));
-        frame(3, MODE_SENDER, address(token));
+        frame(3, MODE_DEFAULT, address(paymaster));
         frame(4, MODE_SENDER, address(token));
+        frame(5, MODE_SENDER, address(token));
     }
 
     function test_verifyExecution_approvesTheExactShape() public {
@@ -94,13 +95,14 @@ contract AccountTest is FrameTestBase {
     function test_verifyExecution_approvesAfterAnExpiryFrame() public {
         goodShape();
         txp(TX_CURRENT_FRAME_INDEX, 1);
-        txp(TX_FRAME_COUNT, 6);
+        txp(TX_FRAME_COUNT, 7);
         frame(0, MODE_VERIFY, address(0x81413f0cF12e9b6a49B1D0439E081c577D57FfFf));
         frame(1, MODE_VERIFY, address(account));
         frame(2, MODE_VERIFY, address(paymaster));
         frame(3, MODE_DEFAULT, address(paymaster));
-        frame(4, MODE_SENDER, address(token));
+        frame(4, MODE_DEFAULT, address(paymaster));
         frame(5, MODE_SENDER, address(token));
+        frame(6, MODE_SENDER, address(token));
         vm.expectEmit(address(account));
         emit Approved(SCOPE_EXECUTION);
         vm.prank(ENTRY_POINT);
@@ -127,26 +129,38 @@ contract AccountTest is FrameTestBase {
 
     function test_verifyExecution_rejectsAThirdSenderFrame() public {
         goodShape();
-        txp(TX_FRAME_COUNT, 6);
-        frame(5, MODE_SENDER, address(token));
+        txp(TX_FRAME_COUNT, 7);
+        frame(6, MODE_SENDER, address(token));
         expectRejected();
     }
 
     function test_verifyExecution_rejectsTwoDifferentTokens() public {
         goodShape();
-        frame(4, MODE_SENDER, address(0x70c));
+        frame(5, MODE_SENDER, address(0x70c));
         expectRejected();
     }
 
     function test_verifyExecution_rejectsADefaultModeTransfer() public {
         goodShape();
-        frame(3, MODE_DEFAULT, address(token));
+        frame(4, MODE_DEFAULT, address(token));
         expectRejected();
     }
 
     function test_verifyExecution_rejectsACommitToAnotherContract() public {
         goodShape();
         frame(2, MODE_DEFAULT, address(0xbad));
+        expectRejected();
+    }
+
+    function test_verifyExecution_rejectsADeadlineCheckByAnotherContract() public {
+        goodShape();
+        frame(3, MODE_DEFAULT, address(0xbad));
+        expectRejected();
+    }
+
+    function test_verifyExecution_rejectsASenderFrameInPlaceOfTheDeadlineCheck() public {
+        goodShape();
+        frame(3, MODE_SENDER, address(token));
         expectRejected();
     }
 

@@ -55,7 +55,11 @@ model custodians already use. A nice-to-have for the pitch; drop it if it costs 
    everyday key; and a paper recovery seed, used only if one of the other two is lost. Any two
    can approve; the browser alone never can. **Paper is for recovery only**: it never signs in
    the everyday flow, so the demo's two everyday approvers are the browser and a device approver.
-   The **Firefly approver firmware is a separate sub-project**, built after the core.
+   Until the Firefly firmware exists, the device approver is a **software stand-in**: a separate
+   "device signer" process (a CLI in its own terminal, with its own seed and its own used-key
+   file), labelled as software everywhere. The quorum is part of the meta-address, so when the
+   Firefly is ready we generate a fresh meta-address with it in the quorum. The **Firefly
+   approver firmware is a separate sub-project**, built after the core.
 7. **Canary.** A Chainlink CRE workflow watching large, long-dormant, exposed addresses for
    sudden sweeps: an early sign someone can break ECDSA. Being built in parallel. The **ESP32
    alert light is a separate sub-project**; the canary publishes a documented JSON alert for it.
@@ -131,6 +135,9 @@ whole transaction is invalid and nothing executes.
 - **Hackathon rules.** Written from scratch at ETHGlobal Mumbai (hacking opened 2026-11-05). The
   author's May 2026 `firefly-quantum` prototype is reference notes only; no code is copied.
   Open-source libraries are fine (credit them). Judges check git history: commit small and often.
+- **Deadline: Saturday 7 Nov 2026, morning IST.** About 15 hours from Friday 17:40 IST, including
+  the night. The author's aim is still every part; the order of work and cut order below decide
+  what is safe to promise.
 - **Team.** Solo for now. Keep docs current so others can join at any point.
 - **Repo.** `github.com/Spoyte/postcurve`, private until submission, then public. All GitHub
   activity uses the Spoyte account. MIT license.
@@ -159,9 +166,13 @@ Three partner picks; a pick covers all that partner's prizes.
     most 3 minutes showing the lead property; no trackers; keys stay on the user's device.
 - **Chainlink** ("Best workflow with CRE", $1.5k): a CRE workflow connecting a blockchain to an
   external API or system, shown via CRE CLI simulation or deployment, meaningfully used.
-- **Third partner: to decide at submission.** Arkiv ("Build on Arkiv", $4k, needs part 8 and its
-  `/arkiv/*.md` files) or ENS ("Best Use of ENSv2", $7k, if the meta-address is published through
-  ENSIP-30 on Sepolia or mainnet).
+- **Arkiv** ("Build on Arkiv (from scratch)", $4k; +$500 Swarm bonus): part 8. Write to Arkiv's
+  current testnet with `@arkiv-network/sdk` or JSON-RPC; a feature users see (the canary
+  dashboard) reads from Arkiv. The README lists the writer wallet and one query. Needs
+  `/arkiv/schema.md`, `friction.md`, `reach.md`, `why-arkiv.md` and `how-you-use-arkiv.md`.
+- **ENS, later** ("Best Use of ENSv2", $7k): publish the meta-address through ENSIP-30 on
+  Sepolia so "pay alice.eth privately" works. Only once everything else is good; it would replace
+  Arkiv or Chainlink as a partner pick. Until then the meta-address is shared off-chain (link or QR).
 - **ETHGlobal submission:** public repo, demo video, and a statement of how AI was used.
 
 ## Demo story (target: 3 minutes)
@@ -236,7 +247,8 @@ Three partner picks; a pick covers all that partner's prizes.
   on ML-KEM. Both go in the README's CROPS "P" line.
 - **Test assets:** a local ERC-20 labelled as test USDC, and an ERC-5564 announcer deployed on
   the local devnet.
-- **Partners:** EF primary; Chainlink for the canary.
+- **Partners:** EF primary, Chainlink for the canary, Arkiv for the dataset (confirmed
+  2026-11-06); ENS later.
 - **Order of work:**
   1. Sidecar patch (in progress).
   2. Paymaster and stealth account contracts with Foundry tests.

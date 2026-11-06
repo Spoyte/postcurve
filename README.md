@@ -22,7 +22,7 @@ Needs [Bun](https://bun.sh) 1.4+ and [Foundry](https://getfoundry.sh) 1.7+.
 
 ```sh
 git clone --recurse-submodules <repo>
-cd sdk && bun install && bun test          # TypeScript signer, 53 tests
+cd sdk && bun install && bun test          # TypeScript signer, 56 tests
 cd ../contracts && forge test -vv          # Solidity verifier + gas figures
 cd ../sdk && bun scripts/gen-vectors.ts    # regenerate spec/vectors (tests check it's unchanged)
 ```
@@ -41,29 +41,6 @@ cd ../sdk && bun scripts/gen-vectors.ts    # regenerate spec/vectors (tests chec
 | Exposure dataset | Canary watchlist and exposure records as queryable Arkiv entities | later |
 | Move | Careful migration from an exposed address into a bunker | later |
 | Local devnet | ethrex + Lighthouse + alt mempool sidecar on 127.0.0.1 ([devnet/](devnet/README.md)) | running |
-
-## Running the tests
-
-Needs [Bun](https://bun.sh) 1.4+ and [Foundry](https://getfoundry.sh) 1.7+.
-
-```sh
-git clone --recurse-submodules <repo>
-cd sdk && bun install && bun test          # TypeScript signer, 53 tests
-cd ../contracts && forge test -vv          # Solidity verifier + gas figures
-cd ../sdk && bun scripts/gen-vectors.ts    # regenerate spec/vectors (tests check it's unchanged)
-```
-
-## Parts
-
-| Part | What it does | Status |
-|---|---|---|
-| Signature core | Hash-only WOTS/XMSS approvals shared by browser, contract and Firefly ([spec](spec/signature.md)) | done (TS + Solidity) |
-| Check | Shows which addresses revealed their public key and the value behind them, with private reads via Anon-RPC | planned |
-| Move | Careful migration: test transfer, recovery check, then the rest | planned |
-| Bunker | EIP-8141 account with a hash-based (WOTS/XMSS) quorum, sent through the alt mempool | planned |
-| Approver device | Firefly Pixie firmware that holds one approver's one-time keys | planned |
-| Canary | Chainlink CRE workflow watching dormant exposed addresses, plus an ESP32 alert light | planned |
-| Exposure dataset | Exposure results published as queryable Arkiv entities | planned |
 
 ## Joining the project
 

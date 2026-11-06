@@ -63,7 +63,10 @@ verify(root, pubSeed, digest, envelope):
 ## Layouts
 
 **Seed.** 32 bytes: the BIP39 entropy of a 24-word English mnemonic. That mnemonic is the
-approver's backup.
+approver's backup. BIP39's checksum is only 8 bits, so about 1 in 256 single wrong-word
+substitutions still passes as a valid, *different* seed. A recovered seed is therefore only
+trusted after its recomputed root matches the identity the account stores (the Move step's
+recovery check).
 
 **Identity.** What the bunker account stores per approver: `(bytes32 root, bytes32 pubSeed)`.
 

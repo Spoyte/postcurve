@@ -24,6 +24,12 @@ COMPOSE_ENV="$DATA/compose.env"
 META="$DATA/devnet.json"
 ACCOUNTS="$DATA/keys/accounts.json"
 
+# The sidecar image is the published upstream build unless SIDECAR_IMAGE says otherwise,
+# from the environment or from a SIDECAR_IMAGE= line in data/compose.env (the environment
+# wins). See README.md, "Patched sidecar image".
+DEFAULT_SIDECAR_IMAGE=ghcr.io/forshtat/mempool-workshop-sidecar:latest
+SIDECAR_IMAGE_FROM_ENV="${SIDECAR_IMAGE:-}"
+
 # Ports and subnet are fixed at the first `up` (written to data/compose.env, which compose
 # reads too); later environment overrides would only desync the script from the containers.
 if [ -f "$COMPOSE_ENV" ]; then
@@ -32,6 +38,8 @@ if [ -f "$COMPOSE_ENV" ]; then
   . "$COMPOSE_ENV"
   set +a
 fi
+# Exported, so compose's ${SIDECAR_IMAGE} sees the same value as this script.
+export SIDECAR_IMAGE="${SIDECAR_IMAGE_FROM_ENV:-${SIDECAR_IMAGE:-$DEFAULT_SIDECAR_IMAGE}}"
 RPC_PORT="${DEVNET_RPC_PORT:-18545}"
 BEACON_PORT="${DEVNET_BEACON_PORT:-15052}"
 SIDECAR_PORT="${DEVNET_SIDECAR_PORT:-14337}"
@@ -48,7 +56,7 @@ IMAGES=(
   protolambda/eth2-val-tools:latest
   ghcr.io/forshtat/ethrex:eip8141-tracer-latest
   ethpandaops/lighthouse:focil
-  ghcr.io/forshtat/mempool-workshop-sidecar:latest
+  "$SIDECAR_IMAGE"
 )
 # name:balance. All keys are generated fresh by `init`; none is ever committed.
 ACCOUNT_SPEC=(dev:1000000 deployer:100 faucet:10000 relayer:100 user1:1000 user2:1000 user3:1000)
@@ -116,7 +124,11 @@ pull_images() {
     for t in 1 2 3 4; do
       log "pulling $img (try $t)"
       docker pull -q "$img" >/dev/null 2>&1 && break
-      [ "$t" = 4 ] && die "could not pull $img"
+      if [ "$t" = 4 ]; then
+        [ "$img" = "$SIDECAR_IMAGE" ] && [ "$img" != "$DEFAULT_SIDECAR_IMAGE" ] &&
+          die "could not pull $img; a locally built image must be built first (README.md, \"Patched sidecar image\")"
+        die "could not pull $img"
+      fi
       sleep 3
     done
   done
@@ -362,7 +374,9 @@ cmd_status() {
   echo "  sync         ${sync:-not answering}"
   echo "  peers        ${peers:-?} (needs >= 1, lighthouse-beacon-2)"
   echo "== sidecar  $SIDECAR"
-  local scid reg code
+  local scid reg code running
+  running=$(compose ps --format '{{.Image}}' sidecar 2>/dev/null || true)
+  echo "  image        ${running:-not running} (SIDECAR_IMAGE=$SIDECAR_IMAGE)"
   scid=$(rpc_result "$SIDECAR" eth_chainId)
   if [ -z "$scid" ]; then echo "  not answering"; else
     reg=$(rpc "$SIDECAR" skandha_config | jq -r '.result.stakingRegistryAddress // empty' 2>/dev/null || true)

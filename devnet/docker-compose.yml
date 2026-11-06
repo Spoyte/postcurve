@@ -12,7 +12,8 @@
 #     14337); ethrex's privileged submission method is unauthenticated;
 #   - keys and the validator mnemonic are generated fresh per machine and only
 #     read from data/ (gitignored); nothing secret is in this file;
-#   - capped container logs; the sidecar runs as a container here too.
+#   - capped container logs; the sidecar runs as a container here too, and
+#     its image is configurable (SIDECAR_IMAGE, see README.md).
 #
 # Use ./devnet.sh rather than calling compose directly: it generates data/ and
 # data/compose.env first. `./devnet.sh compose <args>` passes through.
@@ -199,7 +200,9 @@ services:
   # address; data/sidecar/sidecar.env holds SKANDHA_FAUCET_KEY and
   # SKANDHA_ADMIN_KEY. Both are written by devnet.sh.
   sidecar:
-    image: ghcr.io/forshtat/mempool-workshop-sidecar:latest
+    # SIDECAR_IMAGE selects another build, e.g. the locally built patched image
+    # with per-entity verification gas budgets (README, "Patched sidecar image").
+    image: ${SIDECAR_IMAGE:-ghcr.io/forshtat/mempool-workshop-sidecar:latest}
     logging: *logging
     depends_on:
       ethrex:

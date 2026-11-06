@@ -60,8 +60,9 @@ const checkKnownGap = (name: string, ok: boolean, detail: string, gap: string) =
   console.log(ok ? `PASS  ${name}: ${detail}\n      (this was a known gap - update devnet/README.md)` : `KNOWN-GAP  ${name}: ${detail}\n      ${gap}`);
 };
 const STAKED_BUDGET_GAP =
-  "The sidecar applies MAX_VERIFY_GAS = 100,000 to every validation prefix, staked or not; it has no " +
-  "MAX_VERIFY_GAS_STAKED_ENTITY budget yet. See devnet/README.md.";
+  "The published sidecar image applies MAX_VERIFY_GAS = 100,000 to every validation prefix, staked or not; " +
+  "it has no MAX_VERIFY_GAS_STAKED_ENTITY budget. Run the patched image (SIDECAR_IMAGE, see devnet/README.md, " +
+  '"Patched sidecar image") to close this gap.';
 const info = (msg: string) => console.log(`      ${msg}`);
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").slice(0, 400);
 

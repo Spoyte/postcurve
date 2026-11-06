@@ -132,6 +132,43 @@ predeploy, and the sidecar is configured with its address. Stake with `addStake(
 `addStake`, as `smoke heavy` and the workshop's step 7 do. `unlockStake()` drops the staked
 carve-outs right away.
 
+## Patched sidecar image
+
+The published sidecar image (`ghcr.io/forshtat/mempool-workshop-sidecar:latest`, the default)
+caps the whole validation prefix at EIP-8141's single `MAX_VERIFY_GAS = 100,000`, staked or not
+(see [What is not working yet](#what-is-not-working-yet), item 1). Branch
+`feat/erc8421-per-entity-verify-budget` of the fork
+[Spoyte/mempool-workshop-sidecar](https://github.com/Spoyte/mempool-workshop-sidecar) implements
+ERC-8421 `BUDGET-010` instead. Each entity's validation frames get their own budget: 100,000 gas
+if the entity is unstaked, 1,000,000 if it is staked in the registry. The signature cost counts
+toward the sender, and a `pre_verify` frame toward the frame it precedes. Until upstream has this,
+build the image yourself (local only; never push it):
+
+```sh
+git clone -b feat/erc8421-per-entity-verify-budget https://github.com/Spoyte/mempool-workshop-sidecar.git
+cd mempool-workshop-sidecar
+docker build -t postcurve/sidecar:budget010 .
+```
+
+The build downloads about 1,400 npm packages. On a flaky connection, `bun install` inside it
+can fail with "Integrity check failed for tarball" (a truncated download); run the build again.
+
+`SIDECAR_IMAGE` selects the sidecar image. Swap it on a running devnet without touching the chain:
+
+```sh
+SIDECAR_IMAGE=postcurve/sidecar:budget010 ./devnet.sh compose up -d --no-deps sidecar
+./devnet.sh status        # "image" under "== sidecar" shows what is running
+./devnet.sh smoke heavy   # the staked heavy-validation check reports PASS instead of KNOWN-GAP
+```
+
+To keep it for later `up` runs, add the line `SIDECAR_IMAGE=postcurve/sidecar:budget010` to
+`data/compose.env`. A `SIDECAR_IMAGE` set in the environment wins over that line. `up` pulls only
+images it does not have, so a locally built tag must be built first. To go back to the published
+image, remove the line and run `./devnet.sh compose up -d --no-deps sidecar`.
+
+Only the sidecar changes. The canonical mempool (ethrex, `eth_sendRawTransaction`) keeps
+EIP-8141's single 100,000 cap, as it should.
+
 ## Verified (2026-11-06)
 
 Two full runs from an empty `data/`. Both first runs (`up`, then `reset`) went from setup to
@@ -149,27 +186,38 @@ re-peered.
   `SENDER` frame; that tx was mined and the registry shows the stake. Sent straight to
   `ethrex_submitPrivilegedFrameTransaction`, the heavy tx was mined with both frames
   succeeding (gasUsed 622,407). So block execution accepts a heavy `VERIFY` frame.
+- **Patched sidecar** (`postcurve/sidecar:budget010`, fork branch at `11b4680`), swapped in with
+  `SIDECAR_IMAGE` on the running chain, no reset: `smoke heavy` passed 4/4. While unstaked,
+  the heavy tx was rejected with "unstaked sender ...: validation execution gas sum 625000 +
+  signature-verification cost 100 = 625100 exceeds MAX_VERIFY_GAS_PER_ENTITY 100000". Once the
+  wallet was staked, the same tx was admitted by the sidecar and mined (block 1421, gasUsed
+  622,407, both frames succeeded, sidecar status `OnChain`, explorer `structure` rule `pass`).
+  ethrex's canonical mempool still rejected it. `smoke canonical sidecar` passed 3/3 on the
+  patched image.
 - The sidecar faucet sent 1 ETH. `debug_bundler_*` worked with the admin key and was refused
   without it.
 
 Versions: ethrex `v23.0.0-eip8141-tracer-9aa3645`, Lighthouse `v8.1.3-52e5197`
 (`ethpandaops/lighthouse:focil`), the sidecar image built 2026-10-25 (upstream master
-`2e22ff0`), and `ethereum-genesis-generator:6.1.6`. The ethrex and sidecar tags follow
+`2e22ff0`, digest `sha256:c4cdc5c707d94f3968566ba34904d1a7c4ab4dee962d822e1bac1bf6714e022e`), and
+`ethereum-genesis-generator:6.1.6`. The ethrex and sidecar tags follow
 branches; check `web3_clientVersion` if behaviour changes after a pull.
 
 ## What is not working yet
 
-1. **The sidecar does not admit a staked sender's heavy-validation frame tx.** It applies
-   `MAX_VERIFY_GAS = 100,000` to the summed `limits.execution` of every validation prefix,
-   staked or not. The error is "validation prefix execution gas sum ... exceeds
+1. **The published sidecar image does not admit a staked sender's heavy-validation frame tx.**
+   It applies `MAX_VERIFY_GAS = 100,000` to the summed `limits.execution` of every validation
+   prefix, staked or not. The error is "validation prefix execution gas sum ... exceeds
    MAX_VERIFY_GAS 100000". `MAX_VERIFY_GAS_STAKED_ENTITY` (ERC-8421 `BUDGET-010`) is not
-   implemented: the sidecar's own design doc lists it as a non-goal
+   implemented upstream: the sidecar's own design doc lists it as a non-goal
    (`docs/superpowers/specs/2026-09-28-prevalidate-frame-design.md`). This was checked in the
    published image and in upstream master `2e22ff0`. So the staked-budget question in
-   `docs/devnet-notes.md` is answered: on today's sidecar, there is no larger budget at all.
-   `smoke heavy` reports this as `KNOWN-GAP` and prints `PASS` if it ever changes.
-   Workaround for local testing: submit with `ethrex_submitPrivilegedFrameTransaction`. That
-   mines it, but it tests no mempool rule at all.
+   `docs/devnet-notes.md` has two answers: the published sidecar has no larger budget at all,
+   and the [patched sidecar image](#patched-sidecar-image) gives a staked entity 1,000,000.
+   With the default image, `smoke heavy` reports this as `KNOWN-GAP`; with the patched one it
+   prints `PASS`. Without the patched image, the only workaround is to submit with
+   `ethrex_submitPrivilegedFrameTransaction`. That mines the tx, but it tests no mempool rule
+   at all.
 2. Only the staking registry is predeployed. Upstream's token and DeFi replays (LINK, USDT,
    Uniswap v4 and others, `deploy/predeploy`) are not. Their `fund` step uses upstream's
    genesis key, which this chain does not fund. Running `bun run predeploy run --all` with

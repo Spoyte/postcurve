@@ -119,3 +119,9 @@ code, .mono { font-family: var(--mono); font-size: 0.92em; }
 .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .steps li { display: flex; gap: 10px; align-items: center; }
 .steps .dot { width: 18px; text-align: center; }
+
+/* payments */
+.scanbar { flex-direction: row; align-items: center; gap: 14px; }
+.spinner.slow { animation-duration: 2.4s; }
+.paylist { display: flex; flex-direction: column; gap: 12px; }
+.unit { font-size: 15px; color: var(--muted); font-weight: 600; }

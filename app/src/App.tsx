@@ -4,6 +4,7 @@ import { Sidebar } from "./components/Sidebar";
 import { useApp } from "./lib/appState";
 import { useRoute } from "./lib/route";
 import { Pay } from "./screens/Pay";
+import { Payments } from "./screens/Payments";
 import { Receive } from "./screens/Receive";
 import { Setup } from "./screens/Setup";
 
@@ -53,6 +54,7 @@ export function App() {
   }
   const screens: Record<string, () => ReactNode> = {
     receive: () => <Receive />,
+    payments: () => <Payments />,
   };
   const screen = screens[route.name];
   return <Shell route={route.name || "receive"}>{screen ? screen() : route.name ? <NotBuiltYet name={route.name} /> : <Receive />}</Shell>;

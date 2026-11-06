@@ -12,3 +12,5 @@ export {
   type Identity,
   type Tree,
 } from "./xmss";
+export { transferApprovalDigest, TRANSFER_APPROVAL_TYPES, type TransferApproval } from "./transferApproval";
+export * as stealth from "./stealth";

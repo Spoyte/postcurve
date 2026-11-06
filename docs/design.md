@@ -160,7 +160,9 @@ Three partner picks; a pick covers all that partner's prizes.
   leaf can sign, and the account records used leaves. When a tree runs low, the approver rotates
   to a new root with an approval from the old one.
 - **Approvers sign a bunker-specific approval struct, never a bare digest.** The struct holds
-  chain id, account, leaf index, recipient, value, calldata hash and a valid-until time. The
+  chain id, account, the account's operation nonce, recipient, value, calldata hash, a fee cap
+  and a valid-until time. Each approver signs the same struct with their own one-time key. The
+  fee cap stops whoever submits the transaction from draining the account through gas fees. The
   Firefly rebuilds the hash from the fields it shows on screen, so a compromised host can't show
   one thing and get another signed. The account verifies each approval over the same struct
   hash, and checks that the transaction's execution matches the struct. Demo scope is ETH and

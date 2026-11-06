@@ -72,13 +72,13 @@ contract AccountTest is FrameTestBase {
 
     // ---------------------------------------------------------------- verifyExecution
 
-    /// [only_verify(0), pre_verify(1, PM), pay(2, PM), sender(3, token), sender(4, token)]
+    /// [only_verify(0), pay(1, PM), commit(2, PM), sender(3, token), sender(4, token)]
     function goodShape() internal {
         txp(TX_CURRENT_FRAME_INDEX, 0);
         txp(TX_FRAME_COUNT, 5);
         frame(0, MODE_VERIFY, address(account));
-        frame(1, MODE_DEFAULT, address(paymaster));
-        frame(2, MODE_VERIFY, address(paymaster));
+        frame(1, MODE_VERIFY, address(paymaster));
+        frame(2, MODE_DEFAULT, address(paymaster));
         frame(3, MODE_SENDER, address(token));
         frame(4, MODE_SENDER, address(token));
     }
@@ -91,14 +91,14 @@ contract AccountTest is FrameTestBase {
         account.verifyExecution();
     }
 
-    function test_verifyExecution_approvesAfterADeployFrame() public {
+    function test_verifyExecution_approvesAfterAnExpiryFrame() public {
         goodShape();
         txp(TX_CURRENT_FRAME_INDEX, 1);
         txp(TX_FRAME_COUNT, 6);
-        frame(0, MODE_DEFAULT, address(factory));
+        frame(0, MODE_VERIFY, address(0x81413f0cF12e9b6a49B1D0439E081c577D57FfFf));
         frame(1, MODE_VERIFY, address(account));
-        frame(2, MODE_DEFAULT, address(paymaster));
-        frame(3, MODE_VERIFY, address(paymaster));
+        frame(2, MODE_VERIFY, address(paymaster));
+        frame(3, MODE_DEFAULT, address(paymaster));
         frame(4, MODE_SENDER, address(token));
         frame(5, MODE_SENDER, address(token));
         vm.expectEmit(address(account));
@@ -115,13 +115,13 @@ contract AccountTest is FrameTestBase {
 
     function test_verifyExecution_rejectsAnotherPayer() public {
         goodShape();
-        frame(2, MODE_VERIFY, address(0xbad));
+        frame(1, MODE_VERIFY, address(0xbad));
         expectRejected();
     }
 
-    function test_verifyExecution_rejectsAMissingPreVerify() public {
+    function test_verifyExecution_rejectsAMissingCommitFrame() public {
         goodShape();
-        frame(1, MODE_VERIFY, address(paymaster));
+        frame(2, MODE_VERIFY, address(paymaster));
         expectRejected();
     }
 
@@ -141,6 +141,12 @@ contract AccountTest is FrameTestBase {
     function test_verifyExecution_rejectsADefaultModeTransfer() public {
         goodShape();
         frame(3, MODE_DEFAULT, address(token));
+        expectRejected();
+    }
+
+    function test_verifyExecution_rejectsACommitToAnotherContract() public {
+        goodShape();
+        frame(2, MODE_DEFAULT, address(0xbad));
         expectRejected();
     }
 

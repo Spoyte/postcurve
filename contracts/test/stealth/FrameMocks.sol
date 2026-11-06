@@ -86,7 +86,10 @@ abstract contract FrameTestBase is Test {
     uint256 internal constant TX_CURRENT_FRAME_INDEX = 10;
     uint256 internal constant FP_TARGET = 0;
     uint256 internal constant FP_MODE = 2;
+    uint256 internal constant FP_FLAGS = 3;
+    uint256 internal constant FP_DATA_LENGTH = 4;
     uint256 internal constant FP_STATUS = 5;
+    uint256 internal constant FLAG_ATOMIC = 4;
     uint256 internal constant SCOPE_PAYMENT = 1;
     uint256 internal constant SCOPE_EXECUTION = 2;
 
@@ -107,6 +110,10 @@ abstract contract FrameTestBase is Test {
     function frame(uint256 index, uint256 mode, address target) internal {
         MockFrameParam(ops.frameParamHelper()).put(index, FP_MODE, mode);
         MockFrameParam(ops.frameParamHelper()).put(index, FP_TARGET, uint256(uint160(target)));
+    }
+
+    function frameFlags(uint256 index, uint256 flags) internal {
+        MockFrameParam(ops.frameParamHelper()).put(index, FP_FLAGS, flags);
     }
 
     function frameStatus(uint256 index, uint256 status) internal {

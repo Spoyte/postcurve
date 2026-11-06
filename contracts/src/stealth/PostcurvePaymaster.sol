@@ -17,14 +17,17 @@ interface IStakingRegistry {
 /// @title PostcurvePaymaster
 /// @notice Pays the gas for a stealth bunker account's spend and takes its fee in the token being
 ///         spent, so the recipient never needs ETH from an address linked to them. As a staked entity
-///         under ERC-8421 it has up to 1,000,000 validation gas, which carries the ~530k hash-only
-///         quorum check the unstaked, freshly deployed account could not:
+///         under ERC-8421 its validation frame may use up to 1,000,000 gas, which carries the ~780k
+///         hash-only quorum check the unstaked, freshly deployed account could not:
 ///
-///         [deploy?] [only_verify: account] [pre_verify: this.preVerify] [pay: this] [sender: transfer] [sender: fee]
+///         [only_verify: account] [pay: approvePayment] [commit: atomic] [transfer: atomic] [fee]
 ///
-///         `preVerify` checks everything and records the one-time keys; `approvePayment` (the VERIFY
-///         `pay` frame, which can't write storage) only checks that `preVerify` succeeded for this very
-///         transaction.
+///         `approvePayment` (the VERIFY `pay` frame, a static call) checks everything and approves
+///         payment; it can't write, so it requires the next frame to be `commit` for exactly the
+///         one-time keys it verified, in one atomic batch with both transfers. `commit` records the
+///         keys and enforces the approval's `validUntil` (TIMESTAMP is banned during validation, so the
+///         check runs here, in execution; if it fails the atomic batch reverts both transfers), and only
+///         runs after this paymaster's own `pay` frame succeeded in the same tx.
 ///         If the paymaster doesn't approve payment, the transaction is invalid and nothing executes.
 ///         Immutable: no owner or admin. It deploys its own factory so each knows the other.
 contract PostcurvePaymaster is IPostcurvePaymaster {
@@ -32,6 +35,7 @@ contract PostcurvePaymaster is IPostcurvePaymaster {
 
     address public constant ENTRY_POINT = address(0xaa);
     uint256 internal constant FRAME_SUCCESS = 1;
+    uint256 internal constant ATOMIC_BATCH_FLAG = 0x04;
     uint32 internal constant UNSTAKE_DELAY = 86400;
 
     IFrameOps public immutable FRAME_OPS;
@@ -39,8 +43,6 @@ contract PostcurvePaymaster is IPostcurvePaymaster {
     address public immutable STAKING_REGISTRY;
 
     mapping(bytes32 identityHash => mapping(uint256 leaf => bool)) private _used;
-    /// @dev The sig_hash of the transaction `preVerify` last approved, per stealth account.
-    mapping(address account => bytes32 sigHash) public pending;
 
     struct SpendAuth {
         uint256 threshold;
@@ -52,7 +54,7 @@ contract PostcurvePaymaster is IPostcurvePaymaster {
         uint256 fee;
     }
 
-    event Sponsored(address indexed account, address indexed token, uint256 amount, uint256 fee);
+    event KeysCommitted(address indexed account, uint256 count);
 
     error NotEntryPoint(address caller);
     error NotAStealthAccount(address sender);
@@ -71,8 +73,8 @@ contract PostcurvePaymaster is IPostcurvePaymaster {
         IStakingRegistry(STAKING_REGISTRY).addStake{value: msg.value}(UNSTAKE_DELAY);
     }
 
-    /// @notice The `pre_verify` frame (DEFAULT mode, immediately before this contract's `pay`).
-    function preVerify(SpendAuth calldata auth) external {
+    /// @notice The `pay` frame (VERIFY mode): verifies the spend and approves payment. Read-only.
+    function approvePayment(SpendAuth calldata auth) external {
         if (msg.sender != ENTRY_POINT) revert NotEntryPoint(msg.sender);
         address sender = address(uint160(FRAME_OPS.txParam(TxParam.SENDER)));
         bytes32 commitment = StealthBunkerAccount(payable(sender)).COMMITMENT();
@@ -82,12 +84,7 @@ contract PostcurvePaymaster is IPostcurvePaymaster {
         }
 
         TransferApproval.Data calldata a = auth.approval;
-        if (block.timestamp > a.validUntil) revert Rejected(2);
         if (auth.fee > a.maxFee) revert Rejected(3);
-
-        uint256 i = FRAME_OPS.txParam(TxParam.CURRENT_FRAME_INDEX);
-        _expectTransfer(i + 2, a.token, a.to, a.amount);
-        _expectTransfer(i + 3, a.token, address(this), auth.fee);
 
         bytes32 digest = TransferApproval.digest(a, block.chainid, sender);
         (bytes32[] memory idHashes, uint256[] memory leaves) =
@@ -95,39 +92,52 @@ contract PostcurvePaymaster is IPostcurvePaymaster {
         for (uint256 k = 0; k < leaves.length; k++) {
             if (_used[idHashes[k]][leaves[k]]) revert Rejected(4);
             if (StealthBunkerAccount(payable(sender)).isLeafUsedHere(idHashes[k], leaves[k])) revert Rejected(5);
-            _used[idHashes[k]][leaves[k]] = true;
         }
 
-        pending[sender] = bytes32(FRAME_OPS.txParam(TxParam.SIG_HASH));
-        emit Sponsored(sender, a.token, a.amount, auth.fee);
-    }
-
-    /// @notice The `pay` frame (VERIFY mode, data = approvePayment()): approves payment only right after a
-    ///         successful `preVerify` for this tx. A named function, not the fallback: empty calldata
-    ///         would reach `receive()` instead.
-    function approvePayment() external {
-        if (msg.sender != ENTRY_POINT) revert NotEntryPoint(msg.sender);
         uint256 i = FRAME_OPS.txParam(TxParam.CURRENT_FRAME_INDEX);
-        if (i == 0) revert Rejected(6);
-        if (FRAME_OPS.frameTarget(i - 1) != address(this)) revert Rejected(7);
-        if (FRAME_OPS.frameParam(i - 1, FrameParam.MODE) != uint256(FrameMode.DEFAULT)) revert Rejected(7);
-        if (FRAME_OPS.frameParam(i - 1, FrameParam.STATUS) != FRAME_SUCCESS) revert Rejected(8);
-        address sender = address(uint160(FRAME_OPS.txParam(TxParam.SENDER)));
-        if (pending[sender] != bytes32(FRAME_OPS.txParam(TxParam.SIG_HASH))) revert Rejected(9);
+        if (FRAME_OPS.txParam(TxParam.FRAME_COUNT) != i + 4) revert Rejected(6);
+        _expectFrame(
+            i + 1, FrameMode.DEFAULT, address(this), true, abi.encodeCall(this.commit, (idHashes, leaves, a.validUntil))
+        );
+        _expectFrame(i + 2, FrameMode.SENDER, a.token, true, abi.encodeCall(IERC20.transfer, (a.to, a.amount)));
+        _expectFrame(
+            i + 3, FrameMode.SENDER, a.token, false, abi.encodeCall(IERC20.transfer, (address(this), auth.fee))
+        );
+
         FRAME_OPS.approve(Scope.PAYMENT);
     }
 
-    /// @notice One-time keys this paymaster has accepted, shared by every stealth account.
+    /// @notice The frame right after `pay`: records the one-time keys that `pay` verified and enforces the
+    ///         approval's deadline. It only runs when the preceding frame is this paymaster's successful
+    ///         `pay`, which in turn only succeeds when this frame carries exactly those keys and deadline.
+    function commit(bytes32[] calldata idHashes, uint256[] calldata leaves, uint64 validUntil) external {
+        if (msg.sender != ENTRY_POINT) revert NotEntryPoint(msg.sender);
+        if (block.timestamp > validUntil) revert Rejected(2);
+        uint256 i = FRAME_OPS.txParam(TxParam.CURRENT_FRAME_INDEX);
+        if (i == 0) revert Rejected(7);
+        if (FRAME_OPS.frameTarget(i - 1) != address(this)) revert Rejected(8);
+        if (FRAME_OPS.frameParam(i - 1, FrameParam.MODE) != uint256(FrameMode.VERIFY)) revert Rejected(8);
+        if (FRAME_OPS.frameParam(i - 1, FrameParam.STATUS) != FRAME_SUCCESS) revert Rejected(9);
+        if (idHashes.length != leaves.length) revert Rejected(10);
+        for (uint256 k = 0; k < leaves.length; k++) {
+            if (_used[idHashes[k]][leaves[k]]) revert Rejected(11);
+            _used[idHashes[k]][leaves[k]] = true;
+        }
+        emit KeysCommitted(address(uint160(FRAME_OPS.txParam(TxParam.SENDER))), leaves.length);
+    }
+
+    /// @notice One-time keys this paymaster has recorded, shared by every stealth account.
     function isLeafUsed(bytes32 identityHash, uint256 leaf) external view returns (bool) {
         return _used[identityHash][leaf];
     }
 
-    /// @dev Frame `index` must be a SENDER frame calling `token.transfer(to, amount)`, exactly.
-    function _expectTransfer(uint256 index, address token, address to, uint256 amount) private view {
-        if (FRAME_OPS.frameParam(index, FrameParam.MODE) != uint256(FrameMode.SENDER)) revert Rejected(10);
-        if (FRAME_OPS.frameTarget(index) != token) revert Rejected(11);
-        bytes memory expected = abi.encodeCall(IERC20.transfer, (to, amount));
-        if (FRAME_OPS.frameParam(index, FrameParam.DATA_LENGTH) != expected.length) revert Rejected(12);
-        if (keccak256(FRAME_OPS.frameData(0, expected.length, index)) != keccak256(expected)) revert Rejected(13);
+    /// @dev Frame `index` must have this mode, target, atomic-batch flag and exactly this data.
+    function _expectFrame(uint256 index, FrameMode mode, address target, bool atomic, bytes memory data) private view {
+        if (FRAME_OPS.frameParam(index, FrameParam.MODE) != uint256(mode)) revert Rejected(12);
+        if (FRAME_OPS.frameTarget(index) != target) revert Rejected(13);
+        bool hasAtomic = FRAME_OPS.frameParam(index, FrameParam.FLAGS) & ATOMIC_BATCH_FLAG != 0;
+        if (hasAtomic != atomic) revert Rejected(14);
+        if (FRAME_OPS.frameParam(index, FrameParam.DATA_LENGTH) != data.length) revert Rejected(15);
+        if (keccak256(FRAME_OPS.frameData(0, data.length, index)) != keccak256(data)) revert Rejected(16);
     }
 }

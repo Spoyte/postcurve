@@ -34,6 +34,20 @@ to the miner, and forwards `eth_*` reads and `eth_sendRawTransaction` to ethrex.
   `unlockStake()` drops the staked carve-outs immediately.
 - **Reputation:** entities are `OK` / `THROTTLED` / `BANNED` based on seen versus included txs.
 
+## Measured
+
+Plain-Solidity `WotsXmss.verify` (`contracts/src/WotsXmss.sol`), solc 0.8.28, optimizer 1000
+runs, execution gas of the verifier call only (`forge test -vv`, 2026-11-06):
+
+| Case | Gas | vs canonical `MAX_VERIFY_GAS` (100,000) |
+|---|---|---|
+| One approval | 282,460 | 2.8× |
+| Two approvals (a 2-of-3 quorum) | 529,165 | 5.3× |
+
+Calldata is extra: each envelope is 2,432 bytes. These figures are the unoptimized baseline;
+the allocation-heavy `abi.encode` in the hash loops is the obvious first target if the staked
+budget turns out tighter.
+
 ## Gotchas (from the sidecar's devnet readme)
 
 - A `SENDER` frame that sends value to an address with no account needs `limits.state > 0`;
@@ -55,6 +69,7 @@ builtins, but it is marked very experimental and has never been run on the devne
 ## Still to verify (the devnet test)
 
 1. A first frame tx and a wallet-validated tx go through (workshop steps 1–5).
-2. The staked verification budget is big enough for a 2-of-3 WOTS/XMSS quorum.
+2. The staked verification budget is big enough for a 2-of-3 WOTS/XMSS quorum (~530k gas
+   measured, see above).
 3. A wallet whose `VERIFY` frame burns roughly 600k gas is admitted when staked and rejected when
    unstaked.

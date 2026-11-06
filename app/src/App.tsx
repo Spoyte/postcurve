@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { PageHead, Panel } from "./components/Panel";
+import { Panel } from "./components/Panel";
 import { Sidebar } from "./components/Sidebar";
 import { useApp } from "./lib/appState";
 import { useRoute } from "./lib/route";
+import { Setup } from "./screens/Setup";
 
 function NotBuiltYet({ name }: { name: string }) {
   return (
@@ -44,8 +45,7 @@ export function App() {
   if (!setUp) {
     return (
       <Shell route="setup">
-        <PageHead title="Set up postcurve">Three approver keys, any two of which can spend.</PageHead>
-        <NotBuiltYet name="Setup" />
+        <Setup />
       </Shell>
     );
   }

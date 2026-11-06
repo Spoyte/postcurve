@@ -12,7 +12,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: { "@postcurve/sdk": fileURLToPath(new URL("../sdk/src/index.ts", import.meta.url)) },
-    dedupe: ["viem", "@noble/hashes", "@noble/post-quantum", "@forshtat/hegota-support"],
+    dedupe: ["viem", "@noble/post-quantum", "@forshtat/hegota-support"],
   },
   server: {
     port: 5173,

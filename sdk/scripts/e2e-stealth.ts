@@ -12,28 +12,23 @@ import { randomBytes } from "node:crypto";
 import {
   createPublicClient,
   createWalletClient,
-  encodeAbiParameters,
   encodeFunctionData,
   formatEther,
   formatUnits,
   http,
-  keccak256,
   parseAbiItem,
   toHex,
   type Address,
   type Hex,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { getProfile } from "@forshtat/hegota-support/profiles";
-import * as ftx from "@forshtat/hegota-support/tx";
 import { rpc, toWire } from "@forshtat/hegota-support/rpc";
 import { Approver } from "../src/approver";
 import { encodeMetaAddress, scan, send, spendKey, stealthAddress, viewKeyFromSeed, commitment, type Deployment } from "../src/stealth";
+import { buildSpendFrames, buildSpendTx, SPEND_FEE, SPEND_MAX_FEE } from "../src/stealth/spendTx";
 import { transferApprovalDigest, type TransferApproval } from "../src/transferApproval";
 import { artifact, DEPLOYMENT_PATH, devnetConfig, devnetKey, type StealthDeployment } from "./deploy-stealth";
 
-const profile = getProfile("ethrex-eip8141-tracer");
-const MAX_FEE_PER_GAS = 2_000_000_000n; // 2 gwei, as the devnet smoke test uses
 const TOKEN_ABI = artifact("TestUSDC.sol", "TestUSDC").abi;
 const PM_ABI = artifact("PostcurvePaymaster.sol", "PostcurvePaymaster").abi;
 const ACCOUNT_ABI = artifact("StealthBunkerAccount.sol", "StealthBunkerAccount").abi;
@@ -118,47 +113,39 @@ async function main() {
 
   // 5. Alice approves a transfer with 2 of her 3 hash-only keys and spends through the paymaster
   const destination = privateKeyToAccount(generatePrivateKey()).address;
-  const fee = 500_000n;
+  const fee = SPEND_FEE;
   const head = await pub.getBlock();
   const approval: TransferApproval = {
     nonce: 0n,
     token: dep.token,
     to: destination,
     amount: 25_000_000n - fee,
-    maxFee: 1_000_000n,
+    maxFee: SPEND_MAX_FEE,
     validUntil: head.timestamp + 3600n,
   };
   const digest = transferApprovalDigest(chain.id, stealth, approval);
   const noPersistence = () => {}; // in-process test approvers; real approvers persist (see device-signer.ts)
   const a0 = await browser!.approve(digest, noPersistence);
   const a1 = await device!.approve(digest, noPersistence);
-  const auth = {
-    threshold: 2n,
-    ids,
-    opener,
-    approval: { ...approval, validUntil: approval.validUntil },
-    signerIdx: [0n, 1n],
-    envelopes: [a0.envelope, a1.envelope],
-    fee,
-  };
-  const transfer = (to: Address, amount: bigint) =>
-    encodeFunctionData({ abi: TOKEN_ABI, functionName: "transfer", args: [to, amount] });
-  // [only_verify, pay (verifies the quorum), commit (records the keys), checkDeadline (atomic), transfer (atomic), fee]
-  const ATOMIC_BATCH = 0x04;
-  const idHashes = [ids[0]!, ids[1]!].map((id) =>
-    keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [id.root, id.pubSeed])),
+  const frames = buildSpendFrames(
+    {
+      stealth,
+      paymaster: dep.paymaster,
+      token: dep.token,
+      threshold: 2n,
+      ids,
+      opener,
+      approval,
+      fee,
+      signers: [
+        { idx: 0, leaf: a0.leaf, envelope: a0.envelope },
+        { idx: 1, leaf: a1.leaf, envelope: a1.envelope },
+      ],
+    },
+    { paymaster: PM_ABI, account: ACCOUNT_ABI, token: TOKEN_ABI },
   );
-  const leaves = [BigInt(a0.leaf), BigInt(a1.leaf)];
-  const frames = [
-    ftx.frame(profile, "VERIFY", { target: null, scope: "EXECUTION", execution: 90_000n, data: encodeFunctionData({ abi: ACCOUNT_ABI, functionName: "verifyExecution" }) }),
-    ftx.frame(profile, "VERIFY", { target: dep.paymaster, scope: "PAYMENT", execution: 990_000n, data: encodeFunctionData({ abi: PM_ABI, functionName: "approvePayment", args: [auth] }) }),
-    ftx.frame(profile, "DEFAULT", { target: dep.paymaster, execution: 120_000n, state: 300_000n, data: encodeFunctionData({ abi: PM_ABI, functionName: "commit", args: [idHashes, leaves] }) }),
-    ftx.frame(profile, "DEFAULT", { target: dep.paymaster, flags: ATOMIC_BATCH, execution: 60_000n, data: encodeFunctionData({ abi: PM_ABI, functionName: "checkDeadline", args: [approval.validUntil] }) }),
-    ftx.frame(profile, "SENDER", { target: dep.token, flags: ATOMIC_BATCH, execution: 80_000n, state: 200_000n, data: transfer(destination, approval.amount) }),
-    ftx.frame(profile, "SENDER", { target: dep.token, execution: 80_000n, state: 200_000n, data: transfer(dep.paymaster, fee) }),
-  ];
   const nonce = BigInt(await rpc(rpcUrl, "eth_getTransactionCount", [stealth, "latest"]));
-  const tx = ftx.newTx({ chainId: chain.id, sender: stealth, nonceSeq: nonce, frames, signatures: [], fees: { maxFeePerGas: MAX_FEE_PER_GAS } });
+  const tx = buildSpendTx(chain.id, stealth, nonce, frames);
   const pmEthBefore = await pub.getBalance({ address: dep.paymaster });
   let hash: Hex;
   try {
@@ -185,7 +172,7 @@ async function main() {
   check(pmEthAfter < pmEthBefore, "paymaster paid the gas in ETH", `${formatEther(pmEthBefore - pmEthAfter)} ETH`);
 
   // 7. the same approvals again, in a new tx, are refused: the one-time keys are spent
-  const replay = ftx.newTx({ chainId: chain.id, sender: stealth, nonceSeq: nonce + 1n, frames, signatures: [], fees: { maxFeePerGas: MAX_FEE_PER_GAS } });
+  const replay = buildSpendTx(chain.id, stealth, nonce + 1n, frames);
   let replayRejected = false;
   let reason = "";
   try {

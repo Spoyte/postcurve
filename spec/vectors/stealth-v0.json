@@ -1,0 +1,35 @@
+{
+  "version": 0,
+  "profile": "postcurve-wots-xmss-quorum/v0",
+  "note": "TEST KEYS ONLY. Never use these seeds for funds.",
+  "identities": [
+    {
+      "root": "0x3e736adafa549038692923528beed28fc068ed577e0b4eaa16ceb14531f82c48",
+      "pubSeed": "0x71fe8f7bfd21ec13c7b33d7cd2de50c0182766256f794c4c225e8217bf3bbd16"
+    },
+    {
+      "root": "0x8d1ea97b19f6c9072c698565fde7dc927b2cfafd71de927b812739fd84947eb1",
+      "pubSeed": "0x8dc3b443fe2fe5a3db057acd809c7338ae2d351be3083374c9da5a60e75649bd"
+    },
+    {
+      "root": "0x03798c5df31024aa934186f703a675dea6f469df73c50f2833770b569160b87f",
+      "pubSeed": "0x43a5aad5a89364fb9e3e412d71b5cfb3361a679ed64c55c2508ea25217822c20"
+    }
+  ],
+  "threshold": 2,
+  "spendKey": "0xee8e0c39b5cfb6b4ba8670dc6edcbfe54f7aed1401c8096092986dfc5ae39a10",
+  "sharedSecret": "0xd4aeb15ec1bbfc84dc8d6cf615c4a38476a8038d3ce37d7f741449a0fbdec2b7",
+  "opener": "0x9cc24f5531828edfcca0eabd46c8f9f494e8e800e62f3fb554b5512bfbfbba93",
+  "commitment": "0xf890686c18baa227043f4eb28e44b8cbb133be2c1ee2f19419a66d1d2f50c55d",
+  "approval": {
+    "chainId": 1337,
+    "account": "0x00000000000000000000000000000000000000b0",
+    "nonce": "0",
+    "token": "0x0000000000000000000000000000000000000c0c",
+    "to": "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
+    "amount": "24000000",
+    "maxFee": "1000000",
+    "validUntil": "2000000000",
+    "digest": "0x5247b9a8de7e63590c4aa0b226533f5342bed52354768f791b518d6ce33f896c"
+  }
+}

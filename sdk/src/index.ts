@@ -14,3 +14,4 @@ export {
 } from "./xmss";
 export { transferApprovalDigest, TRANSFER_APPROVAL_TYPES, type TransferApproval } from "./transferApproval";
 export * as stealth from "./stealth";
+export { describeSignRequest, parseSignRequest, signRequestJson, type SignRequest } from "./signRequest";

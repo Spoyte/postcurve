@@ -22,12 +22,16 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { artifact, DEPLOYMENT_PATH, devnetConfig, devnetKey } from "../sdk/scripts/deploy-stealth";
 import { originAllowed } from "../sdk/scripts/localOrigin";
+import { guardDeploy } from "./gate";
+import { createRelay, type Relay } from "./relay";
 import type { AppConfig, StealthDeployment } from "./src/lib/config";
 
 export type OperatorDeps = {
   config: () => AppConfig;
   deploy: (commitment: Hex) => Promise<{ address: Address; txHash: Hex | null }>;
   faucet: (address: Address) => Promise<{ ethTx: Hex; mintTx: Hex }>;
+  /** The phone approver's relay (relay.ts). */
+  relay?: Relay;
 };
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -61,6 +65,8 @@ export function operatorHandler(deps: OperatorDeps): (request: Request) => Promi
         }
         return json(await deps.faucet(getAddress(address.toLowerCase())));
       }
+      const relayed = deps.relay ? await deps.relay.handle(request, path) : null;
+      if (relayed) return relayed;
       return json({ error: `no route for ${request.method} ${path}` }, 404);
     } catch (e) {
       console.error(`[operator] ${request.method} ${path} failed: ${e instanceof Error ? e.message : e}`);
@@ -123,12 +129,16 @@ function realDeps(): OperatorDeps {
   };
 
   return {
+    relay: createRelay(),
     config: () => ({ chainId: chain.id, deployment: deployment(), accountCreationCode, abi }),
     deploy: async (commitment) => {
       const d = deployment();
       const address = (await pub.readContract({ address: d.factory, abi: abi.factory, functionName: "addressOf", args: [commitment] })) as Address;
       const code = await pub.getCode({ address });
       if (code && code !== "0x") return { address, txHash: null };
+      await guardDeploy(address, async (a) =>
+        (await pub.readContract({ address: d.token, abi: abi.token, functionName: "balanceOf", args: [a as Address] })) as bigint,
+      );
       // ~7 KB of account code pays EIP-8037 state gas on this devnet: give it room
       const data = encodeFunctionData({ abi: abi.factory, functionName: "deploy", args: [commitment] });
       const txHash = await wallet("relayer").send(d.factory, data, 0n, 40_000_000n);
@@ -152,5 +162,5 @@ function realDeps(): OperatorDeps {
 if (import.meta.main) {
   const port = Number(process.env.OPERATOR_PORT ?? 8791);
   Bun.serve({ hostname: "127.0.0.1", port, fetch: operatorHandler(realDeps()) });
-  console.error(`postcurve operator (local devnet): listening on http://127.0.0.1:${port} (config, deploy, faucet)`);
+  console.error(`postcurve operator (local devnet): listening on http://127.0.0.1:${port} (config, deploy, faucet, phone relay)`);
 }

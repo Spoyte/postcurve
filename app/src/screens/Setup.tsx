@@ -2,11 +2,13 @@
 // The browser keeps its own key; the device key stays in the device; the paper seed is shown once
 // and only what derives from it (its public identity and the scanning key) is kept.
 
-import { useEffect, useState, type ReactNode } from "react";
+import QRCode from "qrcode";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { bytesToHex, hexToBytes, type Hex } from "viem";
 import { mnemonicFromSeed, stealth, type Identity } from "@postcurve/sdk";
 import { PageHead } from "../components/Panel";
 import { useApp } from "../lib/appState";
+import { newPairId, phoneDevice } from "../lib/device";
 import { identityFromSeed } from "../lib/keys";
 import { go } from "../lib/route";
 
@@ -59,6 +61,27 @@ export function Setup() {
   const [paperWritten, setPaperWritten] = useState(false);
   const [paper, setPaper] = useState<{ identity: Identity; ek: Hex; dk: Hex } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pairId, setPairId] = useState<string | null>(null);
+  const qr = useRef<HTMLCanvasElement>(null);
+  const phoneLink = pairId ? `${location.origin}/#/device?pair=${pairId}` : "";
+
+  // phone pairing: show the QR, then wait for the phone to post its identity
+  useEffect(() => {
+    if (!pairId) return;
+    if (qr.current) QRCode.toCanvas(qr.current, phoneLink, { margin: 1, width: 220, color: { dark: "#0b0f14", light: "#f4f7fa" } }).catch(() => {});
+    let live = true;
+    const t = setInterval(async () => {
+      const id = await phoneDevice(pairId).identity().catch(() => null);
+      if (live && id) {
+        setDeviceId(id);
+        clearInterval(t);
+      }
+    }, 1500);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [pairId]);
 
   // 1. the browser key: made once and kept, so a reload mid-setup doesn't lose it
   useEffect(() => {
@@ -106,7 +129,7 @@ export function Setup() {
     update((s) => ({
       ...s,
       identities: { browser: browserId, device: deviceId, paper: paper.identity },
-      device: { kind: "bridge" },
+      device: pairId ? { kind: "phone", pairId } : { kind: "bridge" },
       meta: { threshold: 2, spendKey, metaAddress, ek: paper.ek, dk: paper.dk },
     }));
     go("#/receive");
@@ -162,13 +185,35 @@ export function Setup() {
       >
         <p className="muted">
           The device holds its own key and shows every request before you approve it. Until the Firefly firmware exists, it is a{" "}
-          <b className="amber">software stand-in</b> running in its own terminal on this computer.
+          <b className="amber">software stand-in</b>: a terminal on this computer, or your phone.
         </p>
-        <div className="row">
-          <button className="btn" onClick={pairDevice} disabled={busy === "device"}>
-            {busy === "device" ? "Pairing…" : "Pair the device terminal"}
-          </button>
-        </div>
+        {!pairId ? (
+          <div className="row">
+            <button className="btn" onClick={pairDevice} disabled={busy === "device"}>
+              {busy === "device" ? "Pairing…" : "Use the device terminal (this computer)"}
+            </button>
+            <button className="btn ghost" onClick={() => setPairId(newPairId())}>
+              Use your phone
+            </button>
+          </div>
+        ) : (
+          <div className="row" style={{ alignItems: "flex-start" }}>
+            <div className="qr">
+              <canvas ref={qr} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 420 }}>
+              <b>Scan this with your phone</b>
+              <span className="muted">It opens postcurve's device page, which makes its own key on the phone and pairs it here.</span>
+              <div className="box">{phoneLink}</div>
+              <div className="row muted">
+                <span className="spinner slow" /> waiting for your phone…
+              </div>
+              <button className="linkish" onClick={() => setPairId(null)}>
+                Use the device terminal instead
+              </button>
+            </div>
+          </div>
+        )}
         {deviceError && (
           <div className="panel warn">
             <p>The device isn't answering ({deviceError}). Start it in a terminal, then pair again:</p>

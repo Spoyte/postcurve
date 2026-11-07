@@ -9,6 +9,7 @@ import { Receive } from "./screens/Receive";
 import { Setup } from "./screens/Setup";
 import { AlertBar, useUnreadAlerts } from "./components/AlertBar";
 import { Canary } from "./screens/Canary";
+import { Device } from "./screens/Device";
 import { Keys } from "./screens/Keys";
 import { Spend } from "./screens/Spend";
 
@@ -49,6 +50,7 @@ export function App() {
 
   // Bob's window: no sidebar, no access to Alice's screens
   if (route.name === "pay") return <Pay />;
+  if (route.name === "device") return <Device pair={route.query.get("pair") ?? ""} />;
 
   const setUp = !!store.meta;
   if (!setUp) {

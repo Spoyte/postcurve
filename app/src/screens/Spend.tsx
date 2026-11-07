@@ -10,7 +10,7 @@ import { PageHead } from "../components/Panel";
 import { useApp } from "../lib/appState";
 import { useBrowserKey } from "../lib/browserKey";
 import { abs, publicClient, sidecarRpc, tokenBalance } from "../lib/chain";
-import { bridgeDevice } from "../lib/device";
+import { bridgeDevice, phoneDevice } from "../lib/device";
 import { short, usdc } from "../lib/format";
 import { runSpend, spendAmounts, type SpendReceipt, type SpendStep } from "../lib/spend";
 
@@ -77,7 +77,7 @@ export function Spend({ account }: { account: string }) {
     setSeen(null);
     setStatus(statusAt("deploy"));
     const pub = publicClient(cfg);
-    const device = bridgeDevice();
+    const device = store.device?.kind === "phone" ? phoneDevice(store.device.pairId) : bridgeDevice();
     let current: SpendStep = "deploy";
     try {
       const r = await runSpend(
@@ -138,6 +138,7 @@ export function Spend({ account }: { account: string }) {
   const gas = result?.receipt.frameReceipts.map((f) => Number(f.gasUsed));
   const frameOk = result?.receipt.frameReceipts.map((f) => f.status === "0x1");
   const browserUsed = store.browser?.used ?? [];
+  const onPhone = store.device?.kind === "phone";
 
   return (
     <>
@@ -194,12 +195,12 @@ export function Spend({ account }: { account: string }) {
               <h3>
                 Device <span className="tag amber">software stand-in</span>
               </h3>
-              <span className="muted">its own key, its own terminal</span>
+              <span className="muted">{onPhone ? "its own key, on your phone" : "its own key, its own terminal"}</span>
             </div>
             {detail.deviceLeaf !== undefined ? (
               <span className="mint">✓ one-time key #{detail.deviceLeaf}</span>
             ) : status.device === "doing" ? (
-              <span className="amber">approve in the device terminal…</span>
+              <span className="amber">{onPhone ? "approve on your phone…" : "approve in the device terminal…"}</span>
             ) : status.device === "failed" ? (
               <span className="red">refused</span>
             ) : (
